@@ -193,7 +193,7 @@
   .field-row .field{flex:1;}
   .dyn-list-item{display:flex; gap:8px; margin-bottom:8px; align-items:center;}
   .dyn-list-item input{flex:1;}
-  .remove-btn{background:var(--card-2); color:var(--danger); border:1px solid var(--line); width:36px; height:36px; border-radius:var(--radius-sm); flex-shrink:0;}
+  .remove-btn{background:var(--card-2); color:var(--danger); border:1px solid var(--line); width:32px; height:32px; border-radius:var(--radius-sm); flex-shrink:0; font-size:.85rem; padding:0;}
   .add-line-btn{background:var(--card-2); color:var(--accent-soft); border:1px dashed var(--accent-dim); width:100%; padding:10px; margin-top:2px;}
 
   .import-modes{display:flex; gap:8px; margin-bottom:16px;}
@@ -207,11 +207,12 @@
   .import-result.ok{color:var(--good); border:1px solid var(--good);}
 
   /* shopping list */
-  .shop-item{display:flex; align-items:center; gap:12px; padding:12px 4px; border-bottom:1px solid var(--line);}
+  .shop-item{display:flex; align-items:center; gap:10px; padding:12px 4px; border-bottom:1px solid var(--line);}
   .shop-item.checked .shop-name{text-decoration:line-through; color:var(--text-faint);}
   .shop-check{width:22px; height:22px; border-radius:6px; border:2px solid var(--accent-dim); flex-shrink:0; display:flex; align-items:center; justify-content:center; color:transparent;}
   .shop-check.on{background:var(--accent); border-color:var(--accent); color:#fff;}
-  .shop-amt{color:var(--text-faint); font-size:.82rem; margin-left:auto; flex-shrink:0;}
+  .shop-name{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .shop-amt{color:var(--text-faint); font-size:.82rem; flex-shrink:0;}
   .select-recipes-list{max-height:50vh; overflow-y:auto; margin:12px 0;}
   .select-recipe-row{display:flex; align-items:center; gap:10px; padding:10px 4px; border-bottom:1px solid var(--line);}
   .select-recipe-row input{width:auto;}
@@ -360,7 +361,13 @@
         <div id="weekLabel" class="week-label"></div>
         <button class="icon-btn" onclick="shiftWeek(1)">›</button>
       </div>
-      <div id="planDays"></div>
+      <div class="day-card">
+        <div class="day-head">
+          <div class="dname">Geplante Gerichte</div>
+          <button class="day-add-btn" onclick="openPlanPicker()">+ Rezept</button>
+        </div>
+        <div id="planList"></div>
+      </div>
     </section>
 
     <!-- ---- TAB: Favoriten ---- -->
@@ -605,6 +612,8 @@ function enterApp(){
   document.getElementById('app').style.display = 'block';
   loadRecipes();
   addZutatRow(); addSchrittRow();
+  const lastTab = localStorage.getItem('witchbrew_lasttab') || 'rezepte';
+  switchTab(lastTab);
 }
 
 // auto-login check (dieses Gerät bleibt eingeloggt, solange gültiger Zugang gemerkt wurde)
@@ -621,8 +630,9 @@ function switchTab(name){
   document.getElementById('tab-' + name).classList.add('active');
   document.querySelectorAll('nav.bottom .nav-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   document.querySelector('.fab').style.display = (name === 'neu') ? 'none' : 'flex';
+  localStorage.setItem('witchbrew_lasttab', name);
   if(name === 'favoriten') renderFavorites();
-  if(name === 'einkauf') renderShopRecipeSelect();
+  if(name === 'einkauf'){ renderShopRecipeSelect(); loadShoppingList(); }
   if(name === 'plan') renderPlanWeek();
 }
 
@@ -650,56 +660,33 @@ function isoDate(d){
 }
 
 async function renderPlanWeek(){
-  const days = [];
-  for(let i=0;i<7;i++){
-    const d = new Date(planWeekStart);
-    d.setDate(d.getDate()+i);
-    days.push(d);
-  }
-  document.getElementById('weekLabel').textContent = `${fmtDate(days[0])} – ${fmtDate(days[6])}`;
+  const weekEnd = new Date(planWeekStart);
+  weekEnd.setDate(weekEnd.getDate()+6);
+  document.getElementById('weekLabel').textContent = `${fmtDate(planWeekStart)} – ${fmtDate(weekEnd)}`;
 
-  const from = isoDate(days[0]);
-  const to = isoDate(days[6]);
-  const { data, error } = await sb.from('witchbrew_mealplan').select('*').gte('datum', from).lte('datum', to);
+  const weekKey = isoDate(planWeekStart);
+  const { data, error } = await sb.from('witchbrew_mealplan').select('*').eq('datum', weekKey);
   mealPlanEntries = error ? [] : (data || []);
 
-  const dayNames = ['Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag','Sonntag'];
-  const todayIso = isoDate(new Date());
-  const wrap = document.getElementById('planDays');
+  const wrap = document.getElementById('planList');
   wrap.innerHTML = '';
-  days.forEach((d, idx) => {
-    const iso = isoDate(d);
-    const card = document.createElement('div');
-    card.className = 'day-card' + (iso === todayIso ? ' today' : '');
-    const entries = mealPlanEntries.filter(e => e.datum === iso);
-    card.innerHTML = `
-      <div class="day-head">
-        <div><span class="dname">${dayNames[idx]}</span> <span class="ddate">${fmtDate(d)}</span></div>
-        <button class="day-add-btn" onclick="openPlanPicker('${iso}','${dayNames[idx]} ${fmtDate(d)}')">+ Rezept</button>
-      </div>
-      <div class="meals-for-day"></div>`;
-    const mealsWrap = card.querySelector('.meals-for-day');
-    if(entries.length === 0){
-      mealsWrap.innerHTML = '<div style="font-size:.78rem; color:var(--text-faint);">Noch nichts geplant.</div>';
-    } else {
-      entries.forEach(e => {
-        const recipe = recipes.find(r => r.id === e.recipe_id);
-        const chip = document.createElement('div');
-        chip.className = 'meal-chip';
-        chip.innerHTML = `
-          <span class="mc-title" onclick="openRecipe('${e.recipe_id}')">${recipe ? escapeHtml(recipe.titel) : '(gelöschtes Rezept)'}</span>
-          <button class="mc-remove" onclick="removeMealPlanEntry('${e.id}')">✕</button>`;
-        mealsWrap.appendChild(chip);
-      });
-    }
-    wrap.appendChild(card);
+  if(mealPlanEntries.length === 0){
+    wrap.innerHTML = '<div style="font-size:.82rem; color:var(--text-faint); padding:6px 0;">Noch nichts für diese Woche geplant.</div>';
+    return;
+  }
+  mealPlanEntries.forEach(e => {
+    const recipe = recipes.find(r => r.id === e.recipe_id);
+    const chip = document.createElement('div');
+    chip.className = 'meal-chip';
+    chip.innerHTML = `
+      <span class="mc-title" onclick="openRecipe('${e.recipe_id}')">${recipe ? escapeHtml(recipe.titel) : '(gelöschtes Rezept)'}</span>
+      <button class="mc-remove" onclick="removeMealPlanEntry('${e.id}')">✕</button>`;
+    wrap.appendChild(chip);
   });
 }
 
-let planPickerDate = null;
-function openPlanPicker(iso, label){
-  planPickerDate = iso;
-  document.getElementById('pp_dateLabel').textContent = 'Rezept für ' + label;
+function openPlanPicker(){
+  document.getElementById('pp_dateLabel').textContent = 'Rezept zur Woche hinzufügen';
   const listWrap = document.getElementById('planPickerList');
   listWrap.innerHTML = '';
   if(recipes.length === 0){
@@ -720,7 +707,8 @@ function closePlanPicker(){
 }
 
 async function addMealPlanEntry(recipeId){
-  const { data, error } = await sb.from('witchbrew_mealplan').insert({datum:planPickerDate, recipe_id:recipeId}).select();
+  const weekKey = isoDate(planWeekStart);
+  const { error } = await sb.from('witchbrew_mealplan').insert({datum:weekKey, recipe_id:recipeId});
   if(error){ showToast('Fehler: ' + error.message); return; }
   closePlanPicker();
   showToast('Zum Plan hinzugefügt');
@@ -734,7 +722,7 @@ async function removeMealPlanEntry(id){
 
 /* ================= DATA LOAD ================= */
 async function loadRecipes(){
-  const { data, error } = await sb.from('witchbrew_recipes').select('*').order('created_at', {ascending:false});
+  const { data, error } = await sb.from('witchbrew_recipes').select('*').order('created_at', {ascending:false}).range(0, 9999);
   if(error){ showToast('Fehler beim Laden: ' + error.message); return; }
   recipes = data || [];
   renderTagChips();
@@ -1140,9 +1128,15 @@ function addSingleToShoppingSelection(){
   switchTab('einkauf');
 }
 
-let shoppingList = JSON.parse(localStorage.getItem('witchbrew_shoplist') || '[]');
+let shoppingList = []; // wird aus Supabase geladen
 
-function buildShoppingList(){
+async function loadShoppingList(){
+  const { data, error } = await sb.from('witchbrew_shoplist').select('*').order('created_at', {ascending:true});
+  shoppingList = error ? [] : (data || []);
+  renderShoppingList();
+}
+
+async function buildShoppingList(){
   if(shoppingSelection.size === 0){
     showToast('Bitte zuerst Häkchen bei mind. einem Rezept setzen');
     return;
@@ -1163,10 +1157,11 @@ function buildShoppingList(){
     manual: false
   }));
   // manuell hinzugefügte Sachen bleiben erhalten, Rezept-Zutaten werden neu berechnet
-  const manualItems = shoppingList.filter(i => i.manual);
-  shoppingList = [...recipeItems, ...manualItems];
-  localStorage.setItem('witchbrew_shoplist', JSON.stringify(shoppingList));
-  renderShoppingList();
+  await sb.from('witchbrew_shoplist').delete().eq('manual', false);
+  if(recipeItems.length > 0){
+    await sb.from('witchbrew_shoplist').insert(recipeItems);
+  }
+  await loadShoppingList();
   showToast('Einkaufsliste erstellt');
 }
 
@@ -1177,45 +1172,43 @@ function renderShoppingList(){
     wrap.innerHTML = '<div class="empty-state">Noch keine Liste erstellt.</div>';
     return;
   }
-  shoppingList.forEach((item, i) => {
+  shoppingList.forEach(item => {
     const row = document.createElement('div');
     row.className = 'shop-item' + (item.checked ? ' checked' : '');
     row.innerHTML = `
-      <div class="shop-check ${item.checked ? 'on':''}" onclick="toggleShopItem(${i})">${item.checked ? '✓':''}</div>
+      <div class="shop-check ${item.checked ? 'on':''}" onclick="toggleShopItem('${item.id}')">${item.checked ? '✓':''}</div>
       <span class="shop-name">${escapeHtml(item.name)}</span>
       <span class="shop-amt">${escapeHtml(item.amt||'')}</span>
-      <button class="remove-btn" style="width:30px; height:30px; margin-left:6px;" onclick="removeShopItem(${i})">✕</button>`;
+      <button class="remove-btn" onclick="removeShopItem('${item.id}')">✕</button>`;
     wrap.appendChild(row);
   });
 }
 
-function addManualShopItem(){
+async function addManualShopItem(){
   const input = document.getElementById('manualShopInput');
   const name = input.value.trim();
   if(!name) return;
-  shoppingList.push({name, amt:'', checked:false, manual:true});
-  localStorage.setItem('witchbrew_shoplist', JSON.stringify(shoppingList));
+  await sb.from('witchbrew_shoplist').insert({name, amt:'', checked:false, manual:true});
   input.value = '';
-  renderShoppingList();
+  await loadShoppingList();
 }
 
-function removeShopItem(i){
-  shoppingList.splice(i, 1);
-  localStorage.setItem('witchbrew_shoplist', JSON.stringify(shoppingList));
-  renderShoppingList();
+async function removeShopItem(id){
+  await sb.from('witchbrew_shoplist').delete().eq('id', id);
+  await loadShoppingList();
 }
 
-function toggleShopItem(i){
-  shoppingList[i].checked = !shoppingList[i].checked;
-  localStorage.setItem('witchbrew_shoplist', JSON.stringify(shoppingList));
-  renderShoppingList();
+async function toggleShopItem(id){
+  const item = shoppingList.find(i => i.id === id);
+  if(!item) return;
+  await sb.from('witchbrew_shoplist').update({checked: !item.checked}).eq('id', id);
+  await loadShoppingList();
 }
 
-function clearShoppingList(){
-  shoppingList = [];
+async function clearShoppingList(){
+  await sb.from('witchbrew_shoplist').delete().neq('id', '00000000-0000-0000-0000-000000000000');
   shoppingSelection.clear();
-  localStorage.removeItem('witchbrew_shoplist');
-  renderShoppingList();
+  await loadShoppingList();
   renderShopRecipeSelect();
 }
 
@@ -1234,7 +1227,7 @@ function showToast(msg){
   toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
 }
 
-renderShoppingList();
+// (Einkaufsliste wird beim Tab-Wechsel bzw. nach Login geladen, siehe switchTab/enterApp)
 
 if('serviceWorker' in navigator){
   window.addEventListener('load', () => {
