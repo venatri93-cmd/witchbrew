@@ -90,7 +90,7 @@
     color:var(--text-dim); font-size:1.1rem;
   }
 
-  main{padding:0 16px 24px;}
+  main{padding:0 16px 100px;}
   .tab-content{display:none;}
   .tab-content.active{display:block;}
 
@@ -517,6 +517,8 @@ function showLoginError(msg){
 }
 
 function logout(){
+  localStorage.removeItem('witchbrew_autologin');
+  localStorage.removeItem(LOGIN_KEY);
   document.getElementById('app').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
 }
@@ -541,6 +543,7 @@ function switchTab(name){
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
   document.querySelectorAll('nav.bottom .nav-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelector('.fab').style.display = (name === 'neu') ? 'none' : 'flex';
   if(name === 'favoriten') renderFavorites();
   if(name === 'einkauf') renderShopRecipeSelect();
 }
