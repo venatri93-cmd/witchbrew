@@ -244,6 +244,43 @@
   .toast.show{opacity:1;}
 
   h3.section-title{font-size:.95rem; color:var(--text-dim); margin:20px 0 10px; text-transform:uppercase; letter-spacing:.5px; font-weight:600;}
+
+  .nutri-row{display:flex; gap:8px; margin:12px 0; flex-wrap:wrap;}
+  .nutri-pill{flex:1; min-width:70px; background:var(--card); border:1px solid var(--line); border-radius:var(--radius-sm); padding:10px 6px; text-align:center;}
+  .nutri-pill .val{font-weight:700; color:var(--accent-soft); font-size:1rem;}
+  .nutri-pill .lbl{font-size:.68rem; color:var(--text-faint); text-transform:uppercase; letter-spacing:.3px;}
+
+  input[type="checkbox"]{accent-color:var(--accent); width:20px; height:20px; flex-shrink:0;}
+
+  /* week plan */
+  .week-nav{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;}
+  .week-label{font-weight:600; font-size:.95rem;}
+  .day-card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:12px 14px; margin-bottom:10px;}
+  .day-card.today{border-color:var(--accent-dim);}
+  .day-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;}
+  .day-head .dname{font-weight:600; font-size:.9rem;}
+  .day-head .ddate{font-size:.72rem; color:var(--text-faint);}
+  .day-add-btn{background:var(--card-2); border:1px dashed var(--accent-dim); color:var(--accent-soft); border-radius:var(--radius-sm); padding:6px 12px; font-size:.78rem;}
+  .meal-chip{display:flex; align-items:center; gap:8px; background:var(--card-2); border-radius:var(--radius-sm); padding:8px 10px; margin-bottom:6px;}
+  .meal-chip .mc-title{flex:1; font-size:.85rem; cursor:pointer;}
+  .meal-chip .mc-remove{background:none; border:none; color:var(--text-faint); font-size:1rem; padding:0 4px;}
+  .picker-row{display:flex; align-items:center; gap:10px; padding:10px 4px; border-bottom:1px solid var(--line); cursor:pointer;}
+  .picker-row:active{background:var(--card-2);}
+
+  /* ---------- Desktop / große Screens ---------- */
+  @media (min-width:560px){
+    body{padding-bottom:0;}
+    #loginScreen{min-height:100vh;}
+    #app{
+      max-width:480px; margin:0 auto; min-height:100vh;
+      border-left:1px solid var(--line); border-right:1px solid var(--line);
+      padding-bottom:78px; box-shadow:0 0 60px rgba(0,0,0,.4);
+    }
+    nav.bottom{max-width:480px; left:50%; transform:translateX(-50%); right:auto;}
+    .fab{right:calc(50% - 240px + 18px);}
+    .modal-backdrop{align-items:center; justify-content:center;}
+    .modal{max-width:480px; border-radius:22px; max-height:88vh;}
+  }
 </style>
 </head>
 <body>
@@ -316,6 +353,16 @@
       <div id="recipeAccordion"></div>
     </section>
 
+    <!-- ---- TAB: Wochenplan ---- -->
+    <section id="tab-plan" class="tab-content">
+      <div class="week-nav">
+        <button class="icon-btn" onclick="shiftWeek(-1)">‹</button>
+        <div id="weekLabel" class="week-label"></div>
+        <button class="icon-btn" onclick="shiftWeek(1)">›</button>
+      </div>
+      <div id="planDays"></div>
+    </section>
+
     <!-- ---- TAB: Favoriten ---- -->
     <section id="tab-favoriten" class="tab-content">
       <div id="favList"></div>
@@ -326,6 +373,11 @@
       <h3 class="section-title">Rezepte auswählen</h3>
       <div class="select-recipes-list" id="shopRecipeSelect"></div>
       <button class="btn-primary" style="width:100%;" onclick="buildShoppingList()">Einkaufsliste erstellen</button>
+      <h3 class="section-title">Manuell hinzufügen</h3>
+      <div class="dyn-list-item">
+        <input type="text" id="manualShopInput" placeholder="z.B. Katzenfutter" onkeydown="if(event.key==='Enter') addManualShopItem()">
+        <button class="btn-primary" style="width:auto; flex-shrink:0;" onclick="addManualShopItem()">+</button>
+      </div>
       <h3 class="section-title">Deine Liste</h3>
       <div id="shoppingListView"></div>
       <button class="btn-ghost" style="width:100%; margin-top:10px;" onclick="clearShoppingList()">Liste leeren</button>
@@ -384,7 +436,16 @@
           <label>Quelle (optional)</label>
           <input type="text" id="f_quelle" placeholder="Instagram @account, KptnCook, ...">
         </div>
-        <button class="btn-primary" style="width:100%;" onclick="saveManualRecipe()">Rezept speichern</button>
+        <h3 class="section-title">Nährwerte pro Portion (optional)</h3>
+        <div class="field-row">
+          <div class="field"><label>kcal</label><input type="number" id="f_kcal" placeholder="464"></div>
+          <div class="field"><label>Protein (g)</label><input type="number" id="f_protein" placeholder="37"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Kohlenhydrate (g)</label><input type="number" id="f_kh" placeholder="53"></div>
+          <div class="field"><label>Fett (g)</label><input type="number" id="f_fett" placeholder="11"></div>
+        </div>
+        <button class="btn-primary" style="width:100%;" id="saveManualBtn" onclick="saveManualRecipe()">Rezept speichern</button>
       </div>
 
       <!-- JSON import -->
@@ -401,6 +462,7 @@
 
   <nav class="bottom">
     <button class="nav-btn active" data-tab="rezepte" onclick="switchTab('rezepte')"><span class="glyph">📖</span>Rezepte</button>
+    <button class="nav-btn" data-tab="plan" onclick="switchTab('plan')"><span class="glyph">🗓️</span>Plan</button>
     <button class="nav-btn" data-tab="favoriten" onclick="switchTab('favoriten')"><span class="glyph">⭐</span>Favoriten</button>
     <button class="nav-btn" data-tab="einkauf" onclick="switchTab('einkauf')"><span class="glyph">🧺</span>Einkauf</button>
     <button class="nav-btn" data-tab="neu" onclick="switchTab('neu')"><span class="glyph">✨</span>Neu</button>
@@ -429,6 +491,7 @@
     <h3 class="section-title">Zubereitung</h3>
     <ol class="step-list" id="m_schritte"></ol>
 
+    <div id="m_naehrwerte"></div>
     <div id="m_quelleWrap"></div>
 
     <div class="modal-actions-row">
@@ -436,13 +499,26 @@
       <button class="btn-ghost" onclick="addSingleToShoppingSelection()">🧺 Zur Liste</button>
     </div>
     <div class="modal-actions-row">
-      <button class="btn-ghost" onclick="closeModal()">Schließen</button>
+      <button class="btn-ghost" onclick="editRecipe()">✎ Bearbeiten</button>
       <button class="btn-danger" onclick="deleteRecipe()">Löschen</button>
+    </div>
+    <div class="modal-actions-row">
+      <button class="btn-ghost" style="width:100%;" onclick="closeModal()">Schließen</button>
     </div>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- ===================== PLAN PICKER MODAL ===================== -->
+<div class="modal-backdrop" id="planPickerModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2 id="pp_dateLabel">Rezept hinzufügen</h2>
+    <div class="select-recipes-list" id="planPickerList" style="max-height:60vh;"></div>
+    <button class="btn-ghost" style="width:100%;" onclick="closePlanPicker()">Schließen</button>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
@@ -459,6 +535,7 @@ let openCategory = null;
 let activeRecipe = null;
 let activeServings = 2;
 let shoppingSelection = new Set();
+let editingRecipeId = null;
 
 /* ================= LOGIN ================= */
 function simpleHash(str){
@@ -546,6 +623,113 @@ function switchTab(name){
   document.querySelector('.fab').style.display = (name === 'neu') ? 'none' : 'flex';
   if(name === 'favoriten') renderFavorites();
   if(name === 'einkauf') renderShopRecipeSelect();
+  if(name === 'plan') renderPlanWeek();
+}
+
+/* ================= WOCHENPLAN ================= */
+function startOfWeek(d){
+  const date = new Date(d);
+  const day = (date.getDay() + 6) % 7; // Montag=0
+  date.setDate(date.getDate() - day);
+  date.setHours(0,0,0,0);
+  return date;
+}
+let planWeekStart = startOfWeek(new Date());
+let mealPlanEntries = []; // {id, datum, recipe_id}
+
+function shiftWeek(delta){
+  planWeekStart.setDate(planWeekStart.getDate() + delta*7);
+  renderPlanWeek();
+}
+
+function fmtDate(d){
+  return d.toLocaleDateString('de-DE', {day:'2-digit', month:'2-digit'});
+}
+function isoDate(d){
+  return d.toISOString().slice(0,10);
+}
+
+async function renderPlanWeek(){
+  const days = [];
+  for(let i=0;i<7;i++){
+    const d = new Date(planWeekStart);
+    d.setDate(d.getDate()+i);
+    days.push(d);
+  }
+  document.getElementById('weekLabel').textContent = `${fmtDate(days[0])} – ${fmtDate(days[6])}`;
+
+  const from = isoDate(days[0]);
+  const to = isoDate(days[6]);
+  const { data, error } = await sb.from('witchbrew_mealplan').select('*').gte('datum', from).lte('datum', to);
+  mealPlanEntries = error ? [] : (data || []);
+
+  const dayNames = ['Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag','Sonntag'];
+  const todayIso = isoDate(new Date());
+  const wrap = document.getElementById('planDays');
+  wrap.innerHTML = '';
+  days.forEach((d, idx) => {
+    const iso = isoDate(d);
+    const card = document.createElement('div');
+    card.className = 'day-card' + (iso === todayIso ? ' today' : '');
+    const entries = mealPlanEntries.filter(e => e.datum === iso);
+    card.innerHTML = `
+      <div class="day-head">
+        <div><span class="dname">${dayNames[idx]}</span> <span class="ddate">${fmtDate(d)}</span></div>
+        <button class="day-add-btn" onclick="openPlanPicker('${iso}','${dayNames[idx]} ${fmtDate(d)}')">+ Rezept</button>
+      </div>
+      <div class="meals-for-day"></div>`;
+    const mealsWrap = card.querySelector('.meals-for-day');
+    if(entries.length === 0){
+      mealsWrap.innerHTML = '<div style="font-size:.78rem; color:var(--text-faint);">Noch nichts geplant.</div>';
+    } else {
+      entries.forEach(e => {
+        const recipe = recipes.find(r => r.id === e.recipe_id);
+        const chip = document.createElement('div');
+        chip.className = 'meal-chip';
+        chip.innerHTML = `
+          <span class="mc-title" onclick="openRecipe('${e.recipe_id}')">${recipe ? escapeHtml(recipe.titel) : '(gelöschtes Rezept)'}</span>
+          <button class="mc-remove" onclick="removeMealPlanEntry('${e.id}')">✕</button>`;
+        mealsWrap.appendChild(chip);
+      });
+    }
+    wrap.appendChild(card);
+  });
+}
+
+let planPickerDate = null;
+function openPlanPicker(iso, label){
+  planPickerDate = iso;
+  document.getElementById('pp_dateLabel').textContent = 'Rezept für ' + label;
+  const listWrap = document.getElementById('planPickerList');
+  listWrap.innerHTML = '';
+  if(recipes.length === 0){
+    listWrap.innerHTML = '<div class="empty-state">Noch keine Rezepte vorhanden.</div>';
+  }
+  recipes.forEach(r => {
+    const row = document.createElement('div');
+    row.className = 'picker-row';
+    row.onclick = () => addMealPlanEntry(r.id);
+    row.innerHTML = `<span>${escapeHtml(r.titel)}</span>`;
+    listWrap.appendChild(row);
+  });
+  document.getElementById('planPickerModal').classList.add('show');
+}
+
+function closePlanPicker(){
+  document.getElementById('planPickerModal').classList.remove('show');
+}
+
+async function addMealPlanEntry(recipeId){
+  const { data, error } = await sb.from('witchbrew_mealplan').insert({datum:planPickerDate, recipe_id:recipeId}).select();
+  if(error){ showToast('Fehler: ' + error.message); return; }
+  closePlanPicker();
+  showToast('Zum Plan hinzugefügt');
+  renderPlanWeek();
+}
+
+async function removeMealPlanEntry(id){
+  await sb.from('witchbrew_mealplan').delete().eq('id', id);
+  renderPlanWeek();
 }
 
 /* ================= DATA LOAD ================= */
@@ -666,6 +850,16 @@ function openRecipe(id){
   document.getElementById('m_servingsNum').textContent = activeServings;
   const qWrap = document.getElementById('m_quelleWrap');
   qWrap.innerHTML = activeRecipe.quelle ? `<a class="source-link" href="#" onclick="return false;">Quelle: ${escapeHtml(activeRecipe.quelle)}</a>` : '';
+  const nWrap = document.getElementById('m_naehrwerte');
+  const hasNutri = activeRecipe.kcal || activeRecipe.protein || activeRecipe.kohlenhydrate || activeRecipe.fett;
+  nWrap.innerHTML = hasNutri ? `
+    <h3 class="section-title">Nährwerte pro Portion</h3>
+    <div class="nutri-row">
+      <div class="nutri-pill"><div class="val">${activeRecipe.kcal ?? '–'}</div><div class="lbl">kcal</div></div>
+      <div class="nutri-pill"><div class="val">${activeRecipe.protein ?? '–'}g</div><div class="lbl">Protein</div></div>
+      <div class="nutri-pill"><div class="val">${activeRecipe.kohlenhydrate ?? '–'}g</div><div class="lbl">Kohlenh.</div></div>
+      <div class="nutri-pill"><div class="val">${activeRecipe.fett ?? '–'}g</div><div class="lbl">Fett</div></div>
+    </div>` : '';
   updateFavBtn();
   document.getElementById('recipeModal').classList.add('show');
 }
@@ -802,15 +996,31 @@ async function saveManualRecipe(){
   const schritte = Array.from(document.querySelectorAll('#schritteList .dyn-list-item')).map(row => row.querySelector('.s-text').value.trim()).filter(Boolean);
   const foto_url = document.getElementById('f_foto').value.trim();
   const quelle = document.getElementById('f_quelle').value.trim();
+  const kcal = document.getElementById('f_kcal').value ? Number(document.getElementById('f_kcal').value) : null;
+  const protein = document.getElementById('f_protein').value ? Number(document.getElementById('f_protein').value) : null;
+  const kohlenhydrate = document.getElementById('f_kh').value ? Number(document.getElementById('f_kh').value) : null;
+  const fett = document.getElementById('f_fett').value ? Number(document.getElementById('f_fett').value) : null;
 
-  const payload = {titel, kategorie, portionen, tags, zutaten, schritte, foto_url, quelle, favorit:false, bewertung:null};
-  const { data, error } = await sb.from('witchbrew_recipes').insert(payload).select();
-  if(error){ showToast('Fehler: ' + error.message); return; }
-  recipes.unshift(data[0]);
+  const payload = {titel, kategorie, portionen, tags, zutaten, schritte, foto_url, quelle, kcal, protein, kohlenhydrate, fett};
+
+  if(editingRecipeId){
+    const { data, error } = await sb.from('witchbrew_recipes').update(payload).eq('id', editingRecipeId).select();
+    if(error){ showToast('Fehler: ' + error.message); return; }
+    const idx = recipes.findIndex(r => r.id === editingRecipeId);
+    if(idx > -1) recipes[idx] = data[0];
+    showToast('Rezept aktualisiert ✨');
+  } else {
+    payload.favorit = false; payload.bewertung = null;
+    const { data, error } = await sb.from('witchbrew_recipes').insert(payload).select();
+    if(error){ showToast('Fehler: ' + error.message); return; }
+    recipes.unshift(data[0]);
+    showToast('Rezept gespeichert ✨');
+  }
+  editingRecipeId = null;
+  document.getElementById('saveManualBtn').textContent = 'Rezept speichern';
   resetManualForm();
   renderTagChips();
   renderRecipes();
-  showToast('Rezept gespeichert ✨');
   switchTab('rezepte');
 }
 
@@ -820,9 +1030,39 @@ function resetManualForm(){
   document.getElementById('f_tags').value = '';
   document.getElementById('f_foto').value = '';
   document.getElementById('f_quelle').value = '';
+  document.getElementById('f_kcal').value = '';
+  document.getElementById('f_protein').value = '';
+  document.getElementById('f_kh').value = '';
+  document.getElementById('f_fett').value = '';
   document.getElementById('zutatenList').innerHTML = '';
   document.getElementById('schritteList').innerHTML = '';
   addZutatRow(); addSchrittRow();
+}
+
+function editRecipe(){
+  const r = activeRecipe;
+  editingRecipeId = r.id;
+  closeModal();
+  setImportMode('manual');
+  switchTab('neu');
+  document.getElementById('f_titel').value = r.titel || '';
+  document.getElementById('f_kategorie').value = r.kategorie || 'Sonstiges';
+  document.getElementById('f_portionen').value = r.portionen || 2;
+  document.getElementById('f_tags').value = (r.tags||[]).join(', ');
+  document.getElementById('f_foto').value = r.foto_url || '';
+  document.getElementById('f_quelle').value = r.quelle || '';
+  document.getElementById('f_kcal').value = r.kcal ?? '';
+  document.getElementById('f_protein').value = r.protein ?? '';
+  document.getElementById('f_kh').value = r.kohlenhydrate ?? '';
+  document.getElementById('f_fett').value = r.fett ?? '';
+  document.getElementById('zutatenList').innerHTML = '';
+  document.getElementById('schritteList').innerHTML = '';
+  (r.zutaten||[]).forEach(z => addZutatRow(z.menge, z.name));
+  if((r.zutaten||[]).length === 0) addZutatRow();
+  (r.schritte||[]).forEach(s => addSchrittRow(s));
+  if((r.schritte||[]).length === 0) addSchrittRow();
+  document.getElementById('saveManualBtn').textContent = 'Änderungen speichern';
+  showToast('Rezept zum Bearbeiten geladen');
 }
 
 /* ================= JSON IMPORT ================= */
@@ -855,6 +1095,10 @@ async function importJson(){
     schritte: Array.isArray(it.schritte) ? it.schritte : [],
     foto_url: it.foto_url || '',
     quelle: it.quelle || '',
+    kcal: it.kcal ?? null,
+    protein: it.protein ?? null,
+    kohlenhydrate: it.kohlenhydrate ?? null,
+    fett: it.fett ?? null,
     favorit: false,
     bewertung: null
   }));
@@ -899,6 +1143,10 @@ function addSingleToShoppingSelection(){
 let shoppingList = JSON.parse(localStorage.getItem('witchbrew_shoplist') || '[]');
 
 function buildShoppingList(){
+  if(shoppingSelection.size === 0){
+    showToast('Bitte zuerst Häkchen bei mind. einem Rezept setzen');
+    return;
+  }
   const map = {};
   recipes.filter(r => shoppingSelection.has(r.id)).forEach(r => {
     (r.zutaten||[]).forEach(z => {
@@ -908,11 +1156,15 @@ function buildShoppingList(){
       if(z.menge) map[key].amounts.push(z.menge);
     });
   });
-  shoppingList = Object.values(map).map(item => ({
+  const recipeItems = Object.values(map).map(item => ({
     name: item.name,
     amt: item.amounts.join(' + '),
-    checked: false
+    checked: false,
+    manual: false
   }));
+  // manuell hinzugefügte Sachen bleiben erhalten, Rezept-Zutaten werden neu berechnet
+  const manualItems = shoppingList.filter(i => i.manual);
+  shoppingList = [...recipeItems, ...manualItems];
   localStorage.setItem('witchbrew_shoplist', JSON.stringify(shoppingList));
   renderShoppingList();
   showToast('Einkaufsliste erstellt');
@@ -931,9 +1183,26 @@ function renderShoppingList(){
     row.innerHTML = `
       <div class="shop-check ${item.checked ? 'on':''}" onclick="toggleShopItem(${i})">${item.checked ? '✓':''}</div>
       <span class="shop-name">${escapeHtml(item.name)}</span>
-      <span class="shop-amt">${escapeHtml(item.amt||'')}</span>`;
+      <span class="shop-amt">${escapeHtml(item.amt||'')}</span>
+      <button class="remove-btn" style="width:30px; height:30px; margin-left:6px;" onclick="removeShopItem(${i})">✕</button>`;
     wrap.appendChild(row);
   });
+}
+
+function addManualShopItem(){
+  const input = document.getElementById('manualShopInput');
+  const name = input.value.trim();
+  if(!name) return;
+  shoppingList.push({name, amt:'', checked:false, manual:true});
+  localStorage.setItem('witchbrew_shoplist', JSON.stringify(shoppingList));
+  input.value = '';
+  renderShoppingList();
+}
+
+function removeShopItem(i){
+  shoppingList.splice(i, 1);
+  localStorage.setItem('witchbrew_shoplist', JSON.stringify(shoppingList));
+  renderShoppingList();
 }
 
 function toggleShopItem(i){
