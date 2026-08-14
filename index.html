@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d0912">
+<title>WitchBrew</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root{
+    --bg:#070f0c;
+    --bg-elev:#0f1a15;
+    --card:#13221c;
+    --card-2:#182c23;
+    --line:#25402f;
+    --accent:#4fae7d;
+    --accent-soft:#7fd6a8;
+    --accent-dim:#2f6b4c;
+    --ember:#d9a441;
+    --text:#eaf5ee;
+    --text-dim:#93b3a1;
+    --text-faint:#5c7c6a;
+    --danger:#e2607a;
+    --good:#7fd6a8;
+    --radius:16px;
+    --radius-sm:10px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    background:
+      radial-gradient(circle at 15% 0%, #16301f 0%, transparent 45%),
+      radial-gradient(circle at 85% 15%, #10241a 0%, transparent 40%),
+      var(--bg);
+    color:var(--text);
+    font-family:'Segoe UI', system-ui, -apple-system, sans-serif;
+    min-height:100vh;
+    padding-bottom:78px;
+  }
+  ::selection{background:var(--accent-dim); color:#fff;}
+
+  /* ---------- Login ---------- */
+  #loginScreen{
+    min-height:100vh; display:flex; align-items:center; justify-content:center;
+    flex-direction:column; padding:32px 24px; text-align:center;
+  }
+  .sigil{
+    width:90px; height:98px; margin-bottom:14px; opacity:.95;
+  }
+  #loginScreen h1{
+    font-size:2.1rem; margin:0 0 4px; letter-spacing:.5px;
+    background:linear-gradient(135deg, var(--accent-soft), var(--ember));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    font-weight:700;
+  }
+  #loginScreen .sub{color:var(--text-dim); font-size:.9rem; margin-bottom:28px;}
+  .login-box{width:100%; max-width:340px; display:flex; flex-direction:column; gap:12px;}
+  input, textarea, select{
+    background:var(--card-2); border:1px solid var(--line); color:var(--text);
+    padding:13px 14px; border-radius:var(--radius-sm); font-size:1rem; width:100%;
+    font-family:inherit;
+  }
+  input:focus, textarea:focus, select:focus{outline:2px solid var(--accent-dim); border-color:var(--accent);}
+  button{
+    font-family:inherit; cursor:pointer; border:none; border-radius:var(--radius-sm);
+    font-size:.95rem; font-weight:600; padding:13px 16px; transition:transform .1s, opacity .15s;
+  }
+  button:active{transform:scale(.97);}
+  .btn-primary{background:linear-gradient(135deg, var(--accent), var(--accent-dim)); color:#fff;}
+  .btn-ghost{background:transparent; border:1px solid var(--line); color:var(--text-dim);}
+  .btn-danger{background:var(--danger); color:#fff;}
+  #loginError{color:var(--danger); font-size:.85rem; min-height:18px;}
+
+  /* ---------- App shell ---------- */
+  #app{display:none;}
+  header.top{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:18px 18px 10px;
+  }
+  header.top h1{
+    font-size:1.4rem; margin:0;
+    background:linear-gradient(135deg, var(--accent-soft), var(--ember));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    font-weight:700; letter-spacing:.3px;
+  }
+  header.top .icon-btn{
+    background:var(--card); border:1px solid var(--line); border-radius:50%;
+    width:40px; height:40px; display:flex; align-items:center; justify-content:center;
+    color:var(--text-dim); font-size:1.1rem;
+  }
+
+  main{padding:0 16px 24px;}
+  .tab-content{display:none;}
+  .tab-content.active{display:block;}
+
+  /* search + filters */
+  .search-wrap{position:relative; margin-bottom:12px;}
+  .search-wrap input{padding-left:38px;}
+  .search-wrap .icon{position:absolute; left:13px; top:50%; transform:translateY(-50%); color:var(--text-faint);}
+  .chips{display:flex; gap:8px; overflow-x:auto; padding:2px 2px 12px; scrollbar-width:none;}
+  .chips::-webkit-scrollbar{display:none;}
+  .chip{
+    flex:0 0 auto; padding:7px 14px; border-radius:999px; border:1px solid var(--line);
+    background:var(--card); color:var(--text-dim); font-size:.82rem; white-space:nowrap; cursor:pointer;
+  }
+  .chip.active{background:var(--accent-dim); color:#fff; border-color:var(--accent);}
+
+  /* accordion */
+  .category{margin-bottom:10px; border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; background:var(--card);}
+  .category-head{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 16px; cursor:pointer; user-select:none;
+  }
+  .category-head .name{font-weight:600; font-size:1rem;}
+  .category-head .count{color:var(--text-faint); font-size:.8rem; margin-left:8px;}
+  .category-head .chevron{transition:transform .2s; color:var(--accent);}
+  .category.open .chevron{transform:rotate(180deg);}
+  .category-body{max-height:0; overflow:hidden; transition:max-height .25s ease;}
+  .category.open .category-body{max-height:4000px;}
+
+  .recipe-row{
+    display:flex; align-items:center; gap:12px; padding:12px 16px;
+    border-top:1px solid var(--line); cursor:pointer;
+  }
+  .recipe-row:active{background:var(--card-2);}
+  .thumb{
+    width:48px; height:48px; border-radius:10px; background:var(--card-2);
+    display:flex; align-items:center; justify-content:center; font-size:1.3rem; flex-shrink:0;
+    background-size:cover; background-position:center;
+    border:1px solid var(--line);
+  }
+  .recipe-info{flex:1; min-width:0;}
+  .recipe-info .title{font-weight:600; font-size:.95rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .recipe-info .meta{font-size:.78rem; color:var(--text-faint); margin-top:2px;}
+  .tag-mini{display:inline-block; background:var(--card-2); color:var(--accent-soft); font-size:.68rem; padding:2px 7px; border-radius:999px; margin-right:4px;}
+  .fav-star{color:var(--text-faint); font-size:1.1rem;}
+  .fav-star.on{color:var(--ember);}
+
+  .empty-state{text-align:center; padding:40px 20px; color:var(--text-faint);}
+  .empty-state .glyph{font-size:2.4rem; margin-bottom:10px; opacity:.6;}
+
+  /* modal */
+  .modal-backdrop{
+    display:none; position:fixed; inset:0; background:rgba(5,3,10,.75); backdrop-filter:blur(2px);
+    z-index:100; align-items:flex-end;
+  }
+  .modal-backdrop.show{display:flex;}
+  .modal{
+    background:var(--bg-elev); width:100%; max-height:92vh; overflow-y:auto;
+    border-radius:22px 22px 0 0; padding:20px 18px 28px; border-top:1px solid var(--line);
+  }
+  .modal-handle{width:40px; height:4px; background:var(--line); border-radius:99px; margin:0 auto 14px;}
+  .modal h2{margin:0 0 4px; font-size:1.3rem;}
+  .modal-actions-row{display:flex; gap:10px; margin:14px 0;}
+  .modal-actions-row button{flex:1;}
+  .servings-stepper{
+    display:flex; align-items:center; gap:14px; background:var(--card); border:1px solid var(--line);
+    border-radius:var(--radius-sm); padding:10px 16px; margin:12px 0; justify-content:space-between;
+  }
+  .servings-stepper .num{font-weight:700; font-size:1.1rem; min-width:60px; text-align:center;}
+  .stepper-btn{
+    width:34px; height:34px; border-radius:50%; background:var(--accent-dim); color:#fff;
+    display:flex; align-items:center; justify-content:center; font-size:1.2rem; border:none;
+  }
+  .ingredient-list{list-style:none; padding:0; margin:8px 0;}
+  .ingredient-list li{
+    display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--line);
+    font-size:.92rem;
+  }
+  .ingredient-list li .amt{color:var(--accent-soft); font-weight:600; margin-right:10px; white-space:nowrap;}
+  .step-list{padding-left:0; list-style:none; counter-reset:step; margin:8px 0;}
+  .step-list li{
+    counter-increment:step; padding:10px 0 10px 34px; position:relative; border-bottom:1px solid var(--line);
+    font-size:.92rem; line-height:1.4;
+  }
+  .step-list li::before{
+    content:counter(step); position:absolute; left:0; top:8px; width:24px; height:24px; border-radius:50%;
+    background:var(--accent-dim); color:#fff; font-size:.75rem; font-weight:700;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .source-link{display:inline-block; margin-top:10px; color:var(--accent-soft); font-size:.85rem; text-decoration:none; border-bottom:1px dashed var(--accent-dim);}
+  .rating-row{display:flex; gap:6px; margin:10px 0;}
+  .star-btn{background:none; border:none; font-size:1.4rem; color:var(--text-faint); padding:0;}
+  .star-btn.on{color:var(--ember);}
+  .tag-row{display:flex; flex-wrap:wrap; gap:6px; margin:10px 0;}
+  .tag-pill{background:var(--card); border:1px solid var(--line); color:var(--accent-soft); font-size:.75rem; padding:4px 10px; border-radius:999px;}
+
+  /* forms */
+  .field{margin-bottom:14px;}
+  .field label{display:block; font-size:.82rem; color:var(--text-dim); margin-bottom:6px;}
+  .field-row{display:flex; gap:10px;}
+  .field-row .field{flex:1;}
+  .dyn-list-item{display:flex; gap:8px; margin-bottom:8px; align-items:center;}
+  .dyn-list-item input{flex:1;}
+  .remove-btn{background:var(--card-2); color:var(--danger); border:1px solid var(--line); width:36px; height:36px; border-radius:var(--radius-sm); flex-shrink:0;}
+  .add-line-btn{background:var(--card-2); color:var(--accent-soft); border:1px dashed var(--accent-dim); width:100%; padding:10px; margin-top:2px;}
+
+  .import-modes{display:flex; gap:8px; margin-bottom:16px;}
+  .import-modes button{flex:1; background:var(--card); border:1px solid var(--line); color:var(--text-dim);}
+  .import-modes button.active{background:var(--accent-dim); color:#fff; border-color:var(--accent);}
+  .import-panel{display:none;}
+  .import-panel.active{display:block;}
+  #jsonImportArea{min-height:160px; font-family:'SF Mono', Consolas, monospace; font-size:.8rem;}
+  .import-result{margin-top:12px; padding:12px; border-radius:var(--radius-sm); background:var(--card); font-size:.85rem;}
+  .import-result.err{color:var(--danger); border:1px solid var(--danger);}
+  .import-result.ok{color:var(--good); border:1px solid var(--good);}
+
+  /* shopping list */
+  .shop-item{display:flex; align-items:center; gap:12px; padding:12px 4px; border-bottom:1px solid var(--line);}
+  .shop-item.checked .shop-name{text-decoration:line-through; color:var(--text-faint);}
+  .shop-check{width:22px; height:22px; border-radius:6px; border:2px solid var(--accent-dim); flex-shrink:0; display:flex; align-items:center; justify-content:center; color:transparent;}
+  .shop-check.on{background:var(--accent); border-color:var(--accent); color:#fff;}
+  .shop-amt{color:var(--text-faint); font-size:.82rem; margin-left:auto; flex-shrink:0;}
+  .select-recipes-list{max-height:50vh; overflow-y:auto; margin:12px 0;}
+  .select-recipe-row{display:flex; align-items:center; gap:10px; padding:10px 4px; border-bottom:1px solid var(--line);}
+  .select-recipe-row input{width:auto;}
+
+  /* bottom nav */
+  nav.bottom{
+    position:fixed; bottom:0; left:0; right:0; background:var(--bg-elev); border-top:1px solid var(--line);
+    display:flex; padding:6px 4px calc(6px + env(safe-area-inset-bottom));
+    z-index:50;
+  }
+  nav.bottom button{
+    flex:1; background:none; border:none; color:var(--text-faint); display:flex; flex-direction:column;
+    align-items:center; gap:3px; font-size:.68rem; padding:6px 2px; border-radius:12px;
+  }
+  nav.bottom button .glyph{font-size:1.3rem;}
+  nav.bottom button.active{color:var(--accent-soft);}
+
+  .fab{
+    position:fixed; bottom:90px; right:18px; width:56px; height:56px; border-radius:50%;
+    background:linear-gradient(135deg, var(--accent), var(--accent-dim)); color:#fff; font-size:1.6rem;
+    display:flex; align-items:center; justify-content:center; border:none; box-shadow:0 6px 20px rgba(167,139,250,.35);
+    z-index:40;
+  }
+
+  .toast{
+    position:fixed; bottom:100px; left:50%; transform:translateX(-50%); background:var(--card);
+    border:1px solid var(--accent-dim); color:var(--text); padding:10px 18px; border-radius:999px;
+    font-size:.85rem; z-index:200; opacity:0; transition:opacity .2s; pointer-events:none;
+  }
+  .toast.show{opacity:1;}
+
+  h3.section-title{font-size:.95rem; color:var(--text-dim); margin:20px 0 10px; text-transform:uppercase; letter-spacing:.5px; font-weight:600;}
+</style>
+</head>
+<body>
+
+<!-- ===================== LOGIN ===================== -->
+<div id="loginScreen">
+  <svg class="sigil" viewBox="0 0 64 70" fill="none">
+    <!-- Dampf/Rauch -->
+    <path d="M22 20 Q19 14 23 10 Q26 7 23 2" stroke="#d9a441" stroke-width="2" fill="none" stroke-linecap="round" opacity=".85"/>
+    <path d="M32 18 Q29 11 33 6 Q36 2 33 -2" stroke="#7fd6a8" stroke-width="2" fill="none" stroke-linecap="round" opacity=".85" transform="translate(0,4)"/>
+    <path d="M42 20 Q45 14 41 10 Q38 7 41 2" stroke="#d9a441" stroke-width="2" fill="none" stroke-linecap="round" opacity=".85"/>
+    <!-- Blubberblasen -->
+    <circle cx="16" cy="24" r="2.4" fill="#7fd6a8"/>
+    <circle cx="48" cy="22" r="2" fill="#d9a441"/>
+    <circle cx="27" cy="14" r="1.5" fill="#7fd6a8"/>
+    <circle cx="38" cy="26" r="1.6" fill="#d9a441"/>
+    <circle cx="12" cy="16" r="1.3" fill="#4fae7d"/>
+    <!-- Öhr-Henkel -->
+    <path d="M10 32 Q4 32 4 27 Q4 24 8 24" stroke="#4fae7d" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+    <path d="M54 32 Q60 32 60 27 Q60 24 56 24" stroke="#4fae7d" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+    <!-- Kesselkörper (gefüllt) -->
+    <path d="M8 30
+             Q8 28 12 27
+             L18 25
+             Q32 22 46 25
+             L52 27
+             Q56 28 56 30
+             Q58 40 52 52
+             Q46 63 32 63
+             Q18 63 12 52
+             Q6 40 8 30 Z"
+          fill="#182c23" stroke="#4fae7d" stroke-width="2.2" stroke-linejoin="round"/>
+    <!-- brodelnder Rand -->
+    <path d="M12 28 Q16 25 20 28 Q24 25 28 28 Q32 25 36 28 Q40 25 44 28 Q48 25 52 28"
+          stroke="#7fd6a8" stroke-width="1.6" fill="none" stroke-linecap="round" opacity=".8"/>
+    <!-- Füße -->
+    <path d="M18 61 Q14 63 11 61 Q10 64 13 65 Q17 65 18 61" fill="#4fae7d"/>
+    <path d="M46 61 Q50 63 53 61 Q54 64 51 65 Q47 65 46 61" fill="#4fae7d"/>
+  </svg>
+  <h1>WitchBrew</h1>
+  <div class="sub">dein digitales Kochgrimoire</div>
+  <div class="login-box">
+    <input type="text" id="loginUser" placeholder="Benutzername" autocomplete="username">
+    <input type="password" id="loginPw" placeholder="Passwort" autocomplete="current-password">
+    <div id="loginError"></div>
+    <button class="btn-primary" onclick="doLogin()">Betreten</button>
+    <button class="btn-ghost" onclick="toggleSetup()" id="setupToggleBtn" style="font-size:.78rem;">Erstes Mal hier? Zugang einrichten</button>
+    <div id="setupBox" style="display:none; margin-top:6px; padding:14px; background:var(--card); border-radius:var(--radius-sm); border:1px solid var(--line);">
+      <div style="font-size:.78rem; color:var(--text-dim); margin-bottom:10px;">Legt Benutzername + Passwort für dieses Gerät fest.</div>
+      <button class="btn-primary" onclick="doSetup()" style="width:100%;">Zugang einrichten &amp; einloggen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== APP ===================== -->
+<div id="app">
+  <header class="top">
+    <h1>WitchBrew</h1>
+    <button class="icon-btn" onclick="logout()">⏻</button>
+  </header>
+
+  <main>
+    <!-- ---- TAB: Rezepte ---- -->
+    <section id="tab-rezepte" class="tab-content active">
+      <div class="search-wrap">
+        <span class="icon">🔍</span>
+        <input type="text" id="searchInput" placeholder="Rezept suchen..." oninput="renderRecipes()">
+      </div>
+      <div class="chips" id="tagChips"></div>
+      <div id="recipeAccordion"></div>
+    </section>
+
+    <!-- ---- TAB: Favoriten ---- -->
+    <section id="tab-favoriten" class="tab-content">
+      <div id="favList"></div>
+    </section>
+
+    <!-- ---- TAB: Einkaufsliste ---- -->
+    <section id="tab-einkauf" class="tab-content">
+      <h3 class="section-title">Rezepte auswählen</h3>
+      <div class="select-recipes-list" id="shopRecipeSelect"></div>
+      <button class="btn-primary" style="width:100%;" onclick="buildShoppingList()">Einkaufsliste erstellen</button>
+      <h3 class="section-title">Deine Liste</h3>
+      <div id="shoppingListView"></div>
+      <button class="btn-ghost" style="width:100%; margin-top:10px;" onclick="clearShoppingList()">Liste leeren</button>
+    </section>
+
+    <!-- ---- TAB: Neu / Import ---- -->
+    <section id="tab-neu" class="tab-content">
+      <div class="import-modes">
+        <button id="modeManualBtn" class="active" onclick="setImportMode('manual')">Manuell</button>
+        <button id="modeJsonBtn" onclick="setImportMode('json')">JSON-Import</button>
+      </div>
+
+      <!-- Manual form -->
+      <div id="panelManual" class="import-panel active">
+        <div class="field">
+          <label>Titel</label>
+          <input type="text" id="f_titel" placeholder="z.B. Kürbis-Risotto">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Kategorie</label>
+            <select id="f_kategorie">
+              <option>Frühstück</option>
+              <option>Hauptgericht</option>
+              <option>Beilage</option>
+              <option>Snack</option>
+              <option>Dessert</option>
+              <option>Getränk</option>
+              <option>Sonstiges</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Portionen (Basis)</label>
+            <input type="number" id="f_portionen" value="2" min="1">
+          </div>
+        </div>
+        <div class="field">
+          <label>Tags (Komma-getrennt)</label>
+          <input type="text" id="f_tags" placeholder="vegan, schnell, hyrox-fuel">
+        </div>
+        <div class="field">
+          <label>Zutaten</label>
+          <div id="zutatenList"></div>
+          <button class="add-line-btn" onclick="addZutatRow()">+ Zutat hinzufügen</button>
+        </div>
+        <div class="field">
+          <label>Zubereitung</label>
+          <div id="schritteList"></div>
+          <button class="add-line-btn" onclick="addSchrittRow()">+ Schritt hinzufügen</button>
+        </div>
+        <div class="field">
+          <label>Foto-URL (optional)</label>
+          <input type="text" id="f_foto" placeholder="https://...">
+        </div>
+        <div class="field">
+          <label>Quelle (optional)</label>
+          <input type="text" id="f_quelle" placeholder="Instagram @account, KptnCook, ...">
+        </div>
+        <button class="btn-primary" style="width:100%;" onclick="saveManualRecipe()">Rezept speichern</button>
+      </div>
+
+      <!-- JSON import -->
+      <div id="panelJson" class="import-panel">
+        <div class="field">
+          <label>JSON einfügen (ein Rezept oder Array mehrerer Rezepte)</label>
+          <textarea id="jsonImportArea" placeholder='[{"titel":"...", "kategorie":"Hauptgericht", "tags":["vegan"], "portionen":2, "zutaten":[{"menge":"200g","name":"Reis"}], "schritte":["..."], "foto_url":"", "quelle":""}]'></textarea>
+        </div>
+        <button class="btn-primary" style="width:100%;" onclick="importJson()">Importieren</button>
+        <div id="importResult"></div>
+      </div>
+    </section>
+  </main>
+
+  <nav class="bottom">
+    <button class="nav-btn active" data-tab="rezepte" onclick="switchTab('rezepte')"><span class="glyph">📖</span>Rezepte</button>
+    <button class="nav-btn" data-tab="favoriten" onclick="switchTab('favoriten')"><span class="glyph">⭐</span>Favoriten</button>
+    <button class="nav-btn" data-tab="einkauf" onclick="switchTab('einkauf')"><span class="glyph">🧺</span>Einkauf</button>
+    <button class="nav-btn" data-tab="neu" onclick="switchTab('neu')"><span class="glyph">✨</span>Neu</button>
+  </nav>
+
+  <button class="fab" onclick="switchTab('neu')">+</button>
+</div>
+
+<!-- ===================== RECIPE MODAL ===================== -->
+<div class="modal-backdrop" id="recipeModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2 id="m_titel"></h2>
+    <div class="tag-row" id="m_tags"></div>
+    <div class="rating-row" id="m_rating"></div>
+
+    <div class="servings-stepper">
+      <button class="stepper-btn" onclick="changeServings(-1)">−</button>
+      <div><div class="num" id="m_servingsNum">2</div><div style="font-size:.7rem;color:var(--text-faint);text-align:center;">Portionen</div></div>
+      <button class="stepper-btn" onclick="changeServings(1)">+</button>
+    </div>
+
+    <h3 class="section-title">Zutaten</h3>
+    <ul class="ingredient-list" id="m_zutaten"></ul>
+
+    <h3 class="section-title">Zubereitung</h3>
+    <ol class="step-list" id="m_schritte"></ol>
+
+    <div id="m_quelleWrap"></div>
+
+    <div class="modal-actions-row">
+      <button class="btn-ghost" onclick="toggleFavorit()" id="m_favBtn">☆ Favorit</button>
+      <button class="btn-ghost" onclick="addSingleToShoppingSelection()">🧺 Zur Liste</button>
+    </div>
+    <div class="modal-actions-row">
+      <button class="btn-ghost" onclick="closeModal()">Schließen</button>
+      <button class="btn-danger" onclick="deleteRecipe()">Löschen</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+/* ================= CONFIG ================= */
+const SUPABASE_URL = 'https://iojktoupfrfembgwclqe.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_h8TqNTprJJV-iF5A5d-LpA_bwGaZjBK';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const LOGIN_KEY = 'witchbrew_login_v1';
+
+/* ================= STATE ================= */
+let recipes = [];
+let currentTag = null;
+let openCategory = null;
+let activeRecipe = null;
+let activeServings = 2;
+let shoppingSelection = new Set();
+
+/* ================= LOGIN ================= */
+function simpleHash(str){
+  let h = 0;
+  for(let i=0;i<str.length;i++){ h = (h<<5) - h + str.charCodeAt(i); h |= 0; }
+  return 'wb_' + Math.abs(h).toString(36);
+}
+
+function toggleSetup(){
+  const box = document.getElementById('setupBox');
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+}
+
+function doSetup(){
+  const user = document.getElementById('loginUser').value.trim();
+  const pw = document.getElementById('loginPw').value;
+  if(!user || !pw){ showLoginError('Bitte Benutzername und Passwort eingeben.'); return; }
+  const hash = simpleHash(user + '::' + pw);
+  localStorage.setItem(LOGIN_KEY, JSON.stringify({user, hash}));
+  enterApp();
+}
+
+function doLogin(){
+  const user = document.getElementById('loginUser').value.trim();
+  const pw = document.getElementById('loginPw').value;
+  const stored = localStorage.getItem(LOGIN_KEY);
+  if(!stored){ showLoginError('Noch kein Zugang eingerichtet — siehe Link unten.'); return; }
+  const data = JSON.parse(stored);
+  const hash = simpleHash(user + '::' + pw);
+  if(data.user === user && data.hash === hash){
+    enterApp();
+  } else {
+    showLoginError('Benutzername oder Passwort falsch.');
+  }
+}
+
+function showLoginError(msg){
+  document.getElementById('loginError').textContent = msg;
+}
+
+function logout(){
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+}
+
+function enterApp(){
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  loadRecipes();
+  addZutatRow(); addSchrittRow();
+}
+
+// auto-login check (stay logged in on this device)
+window.addEventListener('load', () => {
+  const stored = localStorage.getItem(LOGIN_KEY);
+  const auto = localStorage.getItem('witchbrew_autologin');
+  if(stored && auto === '1'){ enterApp(); }
+});
+function rememberDevice(){ localStorage.setItem('witchbrew_autologin','1'); }
+
+/* wrap doLogin/doSetup to remember device */
+const _doLogin = doLogin, _doSetup = doSetup;
+doLogin = function(){ _doLogin(); rememberDevice(); };
+doSetup = function(){ _doSetup(); rememberDevice(); };
+
+/* ================= TABS ================= */
+function switchTab(name){
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  document.querySelectorAll('nav.bottom .nav-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  if(name === 'favoriten') renderFavorites();
+  if(name === 'einkauf') renderShopRecipeSelect();
+}
+
+/* ================= DATA LOAD ================= */
+async function loadRecipes(){
+  const { data, error } = await sb.from('witchbrew_recipes').select('*').order('created_at', {ascending:false});
+  if(error){ showToast('Fehler beim Laden: ' + error.message); return; }
+  recipes = data || [];
+  renderTagChips();
+  renderRecipes();
+}
+
+/* ================= TAG CHIPS ================= */
+function allTags(){
+  const s = new Set();
+  recipes.forEach(r => (r.tags||[]).forEach(t => s.add(t)));
+  return Array.from(s).sort();
+}
+
+function renderTagChips(){
+  const wrap = document.getElementById('tagChips');
+  const tags = allTags();
+  wrap.innerHTML = '';
+  const allChip = document.createElement('div');
+  allChip.className = 'chip' + (currentTag === null ? ' active' : '');
+  allChip.textContent = 'Alle';
+  allChip.onclick = () => { currentTag = null; renderTagChips(); renderRecipes(); };
+  wrap.appendChild(allChip);
+  tags.forEach(t => {
+    const c = document.createElement('div');
+    c.className = 'chip' + (currentTag === t ? ' active' : '');
+    c.textContent = t;
+    c.onclick = () => { currentTag = (currentTag === t ? null : t); renderTagChips(); renderRecipes(); };
+    wrap.appendChild(c);
+  });
+}
+
+/* ================= RENDER RECIPE ACCORDION ================= */
+function filteredRecipes(){
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  return recipes.filter(r => {
+    if(currentTag && !(r.tags||[]).includes(currentTag)) return false;
+    if(q && !r.titel.toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+
+function renderRecipes(){
+  const list = filteredRecipes();
+  const byCat = {};
+  list.forEach(r => {
+    const cat = r.kategorie || 'Sonstiges';
+    if(!byCat[cat]) byCat[cat] = [];
+    byCat[cat].push(r);
+  });
+  const wrap = document.getElementById('recipeAccordion');
+  wrap.innerHTML = '';
+  const cats = Object.keys(byCat).sort();
+  if(cats.length === 0){
+    wrap.innerHTML = '<div class="empty-state"><div class="glyph">🪄</div>Noch keine Rezepte hier.<br>Leg los unter „Neu“.</div>';
+    return;
+  }
+  cats.forEach(cat => {
+    const catEl = document.createElement('div');
+    catEl.className = 'category' + (openCategory === cat ? ' open' : '');
+    catEl.innerHTML = `
+      <div class="category-head" onclick="toggleCategory('${cat.replace(/'/g,"\\'")}')">
+        <div><span class="name">${escapeHtml(cat)}</span><span class="count">${byCat[cat].length}</span></div>
+        <span class="chevron">⌄</span>
+      </div>
+      <div class="category-body"></div>`;
+    const body = catEl.querySelector('.category-body');
+    byCat[cat].forEach(r => body.appendChild(recipeRowEl(r)));
+    wrap.appendChild(catEl);
+  });
+}
+
+function toggleCategory(cat){
+  openCategory = (openCategory === cat ? null : cat);
+  renderRecipes();
+}
+
+function recipeRowEl(r){
+  const row = document.createElement('div');
+  row.className = 'recipe-row';
+  row.onclick = () => openRecipe(r.id);
+  const thumbStyle = r.foto_url ? `style="background-image:url('${r.foto_url}')"` : '';
+  row.innerHTML = `
+    <div class="thumb" ${thumbStyle}>${r.foto_url ? '' : '🧙'}</div>
+    <div class="recipe-info">
+      <div class="title">${escapeHtml(r.titel)}</div>
+      <div class="meta">${(r.tags||[]).slice(0,3).map(t=>`<span class="tag-mini">${escapeHtml(t)}</span>`).join('')}</div>
+    </div>
+    <div class="fav-star ${r.favorit ? 'on':''}">${r.favorit ? '★' : '☆'}</div>`;
+  return row;
+}
+
+function renderFavorites(){
+  const wrap = document.getElementById('favList');
+  const favs = recipes.filter(r => r.favorit);
+  wrap.innerHTML = '';
+  if(favs.length === 0){
+    wrap.innerHTML = '<div class="empty-state"><div class="glyph">⭐</div>Noch keine Favoriten markiert.</div>';
+    return;
+  }
+  favs.forEach(r => wrap.appendChild(recipeRowEl(r)));
+}
+
+/* ================= MODAL ================= */
+function openRecipe(id){
+  activeRecipe = recipes.find(r => r.id === id);
+  if(!activeRecipe) return;
+  activeServings = activeRecipe.portionen || 2;
+  document.getElementById('m_titel').textContent = activeRecipe.titel;
+  document.getElementById('m_tags').innerHTML = (activeRecipe.tags||[]).map(t => `<span class="tag-pill">${escapeHtml(t)}</span>`).join('');
+  renderRating();
+  renderModalIngredients();
+  renderModalSteps();
+  document.getElementById('m_servingsNum').textContent = activeServings;
+  const qWrap = document.getElementById('m_quelleWrap');
+  qWrap.innerHTML = activeRecipe.quelle ? `<a class="source-link" href="#" onclick="return false;">Quelle: ${escapeHtml(activeRecipe.quelle)}</a>` : '';
+  updateFavBtn();
+  document.getElementById('recipeModal').classList.add('show');
+}
+
+function closeModal(){
+  document.getElementById('recipeModal').classList.remove('show');
+  activeRecipe = null;
+}
+
+function renderRating(){
+  const wrap = document.getElementById('m_rating');
+  wrap.innerHTML = '';
+  for(let i=1;i<=5;i++){
+    const b = document.createElement('button');
+    b.className = 'star-btn' + (activeRecipe.bewertung >= i ? ' on' : '');
+    b.textContent = '★';
+    b.onclick = () => setRating(i);
+    wrap.appendChild(b);
+  }
+}
+
+async function setRating(i){
+  const newVal = activeRecipe.bewertung === i ? null : i;
+  activeRecipe.bewertung = newVal;
+  renderRating();
+  await sb.from('witchbrew_recipes').update({bewertung:newVal}).eq('id', activeRecipe.id);
+  const local = recipes.find(r=>r.id===activeRecipe.id); if(local) local.bewertung = newVal;
+}
+
+function updateFavBtn(){
+  const btn = document.getElementById('m_favBtn');
+  btn.textContent = activeRecipe.favorit ? '★ Favorit' : '☆ Favorit';
+}
+
+async function toggleFavorit(){
+  activeRecipe.favorit = !activeRecipe.favorit;
+  updateFavBtn();
+  await sb.from('witchbrew_recipes').update({favorit:activeRecipe.favorit}).eq('id', activeRecipe.id);
+  const local = recipes.find(r=>r.id===activeRecipe.id); if(local) local.favorit = activeRecipe.favorit;
+  renderRecipes();
+}
+
+async function deleteRecipe(){
+  if(!confirm('Rezept wirklich löschen?')) return;
+  await sb.from('witchbrew_recipes').delete().eq('id', activeRecipe.id);
+  recipes = recipes.filter(r => r.id !== activeRecipe.id);
+  closeModal();
+  renderTagChips();
+  renderRecipes();
+  showToast('Rezept gelöscht');
+}
+
+function changeServings(delta){
+  const base = activeRecipe.portionen || 1;
+  const next = activeServings + delta;
+  if(next < 1) return;
+  activeServings = next;
+  document.getElementById('m_servingsNum').textContent = activeServings;
+  renderModalIngredients();
+}
+
+function scaleAmount(menge, factor){
+  // extract leading number (supports decimals & simple fractions like "1/2")
+  const m = String(menge).match(/^([\d.,]+)(\s*\/\s*[\d.,]+)?\s*(.*)$/);
+  if(!m) return menge;
+  let num;
+  if(m[2]){
+    const a = parseFloat(m[1].replace(',','.'));
+    const b = parseFloat(m[2].replace('/','').replace(',','.'));
+    num = a / b;
+  } else {
+    num = parseFloat(m[1].replace(',','.'));
+  }
+  if(isNaN(num)) return menge;
+  const scaled = num * factor;
+  const rounded = Math.round(scaled * 100) / 100;
+  return rounded + (m[3] ? ' ' + m[3] : '');
+}
+
+function renderModalIngredients(){
+  const factor = activeServings / (activeRecipe.portionen || 1);
+  const wrap = document.getElementById('m_zutaten');
+  wrap.innerHTML = '';
+  (activeRecipe.zutaten||[]).forEach(z => {
+    const li = document.createElement('li');
+    const amt = z.menge ? scaleAmount(z.menge, factor) : '';
+    li.innerHTML = `<span>${escapeHtml(z.name||'')}</span><span class="amt">${escapeHtml(String(amt))}</span>`;
+    wrap.appendChild(li);
+  });
+}
+
+function renderModalSteps(){
+  const wrap = document.getElementById('m_schritte');
+  wrap.innerHTML = '';
+  (activeRecipe.schritte||[]).forEach(s => {
+    const li = document.createElement('li');
+    li.textContent = s;
+    wrap.appendChild(li);
+  });
+}
+
+/* ================= MANUAL FORM ================= */
+function addZutatRow(menge='', name=''){
+  const wrap = document.getElementById('zutatenList');
+  const row = document.createElement('div');
+  row.className = 'dyn-list-item';
+  row.innerHTML = `
+    <input type="text" placeholder="Menge (z.B. 200g)" class="z-menge" value="${escapeAttr(menge)}" style="max-width:110px;">
+    <input type="text" placeholder="Zutat" class="z-name" value="${escapeAttr(name)}">
+    <button class="remove-btn" onclick="this.parentElement.remove()">✕</button>`;
+  wrap.appendChild(row);
+}
+
+function addSchrittRow(text=''){
+  const wrap = document.getElementById('schritteList');
+  const row = document.createElement('div');
+  row.className = 'dyn-list-item';
+  row.innerHTML = `
+    <input type="text" placeholder="Schritt beschreiben..." class="s-text" value="${escapeAttr(text)}">
+    <button class="remove-btn" onclick="this.parentElement.remove()">✕</button>`;
+  wrap.appendChild(row);
+}
+
+async function saveManualRecipe(){
+  const titel = document.getElementById('f_titel').value.trim();
+  if(!titel){ showToast('Titel fehlt'); return; }
+  const kategorie = document.getElementById('f_kategorie').value;
+  const portionen = parseInt(document.getElementById('f_portionen').value) || 1;
+  const tags = document.getElementById('f_tags').value.split(',').map(t=>t.trim()).filter(Boolean);
+  const zutaten = Array.from(document.querySelectorAll('#zutatenList .dyn-list-item')).map(row => ({
+    menge: row.querySelector('.z-menge').value.trim(),
+    name: row.querySelector('.z-name').value.trim()
+  })).filter(z => z.name);
+  const schritte = Array.from(document.querySelectorAll('#schritteList .dyn-list-item')).map(row => row.querySelector('.s-text').value.trim()).filter(Boolean);
+  const foto_url = document.getElementById('f_foto').value.trim();
+  const quelle = document.getElementById('f_quelle').value.trim();
+
+  const payload = {titel, kategorie, portionen, tags, zutaten, schritte, foto_url, quelle, favorit:false, bewertung:null};
+  const { data, error } = await sb.from('witchbrew_recipes').insert(payload).select();
+  if(error){ showToast('Fehler: ' + error.message); return; }
+  recipes.unshift(data[0]);
+  resetManualForm();
+  renderTagChips();
+  renderRecipes();
+  showToast('Rezept gespeichert ✨');
+  switchTab('rezepte');
+}
+
+function resetManualForm(){
+  document.getElementById('f_titel').value = '';
+  document.getElementById('f_portionen').value = 2;
+  document.getElementById('f_tags').value = '';
+  document.getElementById('f_foto').value = '';
+  document.getElementById('f_quelle').value = '';
+  document.getElementById('zutatenList').innerHTML = '';
+  document.getElementById('schritteList').innerHTML = '';
+  addZutatRow(); addSchrittRow();
+}
+
+/* ================= JSON IMPORT ================= */
+function setImportMode(mode){
+  document.getElementById('modeManualBtn').classList.toggle('active', mode==='manual');
+  document.getElementById('modeJsonBtn').classList.toggle('active', mode==='json');
+  document.getElementById('panelManual').classList.toggle('active', mode==='manual');
+  document.getElementById('panelJson').classList.toggle('active', mode==='json');
+}
+
+async function importJson(){
+  const raw = document.getElementById('jsonImportArea').value.trim();
+  const resultEl = document.getElementById('importResult');
+  resultEl.className = 'import-result';
+  let parsed;
+  try{
+    parsed = JSON.parse(raw);
+  } catch(e){
+    resultEl.className = 'import-result err';
+    resultEl.textContent = 'JSON ungültig: ' + e.message;
+    return;
+  }
+  const items = Array.isArray(parsed) ? parsed : [parsed];
+  const payloads = items.map(it => ({
+    titel: it.titel || 'Unbenannt',
+    kategorie: it.kategorie || 'Sonstiges',
+    tags: Array.isArray(it.tags) ? it.tags : [],
+    portionen: it.portionen || 2,
+    zutaten: Array.isArray(it.zutaten) ? it.zutaten : [],
+    schritte: Array.isArray(it.schritte) ? it.schritte : [],
+    foto_url: it.foto_url || '',
+    quelle: it.quelle || '',
+    favorit: false,
+    bewertung: null
+  }));
+  const { data, error } = await sb.from('witchbrew_recipes').insert(payloads).select();
+  if(error){
+    resultEl.className = 'import-result err';
+    resultEl.textContent = 'Fehler beim Import: ' + error.message;
+    return;
+  }
+  recipes = [...data, ...recipes];
+  renderTagChips();
+  renderRecipes();
+  resultEl.className = 'import-result ok';
+  resultEl.textContent = `${data.length} Rezept(e) erfolgreich importiert.`;
+  document.getElementById('jsonImportArea').value = '';
+}
+
+/* ================= SHOPPING LIST ================= */
+function renderShopRecipeSelect(){
+  const wrap = document.getElementById('shopRecipeSelect');
+  wrap.innerHTML = '';
+  recipes.forEach(r => {
+    const row = document.createElement('div');
+    row.className = 'select-recipe-row';
+    const checked = shoppingSelection.has(r.id) ? 'checked' : '';
+    row.innerHTML = `<input type="checkbox" ${checked} onchange="toggleShopSelect('${r.id}', this.checked)"><span>${escapeHtml(r.titel)}</span>`;
+    wrap.appendChild(row);
+  });
+}
+
+function toggleShopSelect(id, checked){
+  if(checked) shoppingSelection.add(id); else shoppingSelection.delete(id);
+}
+
+function addSingleToShoppingSelection(){
+  shoppingSelection.add(activeRecipe.id);
+  showToast('Zur Einkaufsliste-Auswahl hinzugefügt');
+  closeModal();
+  switchTab('einkauf');
+}
+
+let shoppingList = JSON.parse(localStorage.getItem('witchbrew_shoplist') || '[]');
+
+function buildShoppingList(){
+  const map = {};
+  recipes.filter(r => shoppingSelection.has(r.id)).forEach(r => {
+    (r.zutaten||[]).forEach(z => {
+      const key = (z.name||'').toLowerCase().trim();
+      if(!key) return;
+      if(!map[key]) map[key] = {name:z.name, amounts:[]};
+      if(z.menge) map[key].amounts.push(z.menge);
+    });
+  });
+  shoppingList = Object.values(map).map(item => ({
+    name: item.name,
+    amt: item.amounts.join(' + '),
+    checked: false
+  }));
+  localStorage.setItem('witchbrew_shoplist', JSON.stringify(shoppingList));
+  renderShoppingList();
+  showToast('Einkaufsliste erstellt');
+}
+
+function renderShoppingList(){
+  const wrap = document.getElementById('shoppingListView');
+  wrap.innerHTML = '';
+  if(shoppingList.length === 0){
+    wrap.innerHTML = '<div class="empty-state">Noch keine Liste erstellt.</div>';
+    return;
+  }
+  shoppingList.forEach((item, i) => {
+    const row = document.createElement('div');
+    row.className = 'shop-item' + (item.checked ? ' checked' : '');
+    row.innerHTML = `
+      <div class="shop-check ${item.checked ? 'on':''}" onclick="toggleShopItem(${i})">${item.checked ? '✓':''}</div>
+      <span class="shop-name">${escapeHtml(item.name)}</span>
+      <span class="shop-amt">${escapeHtml(item.amt||'')}</span>`;
+    wrap.appendChild(row);
+  });
+}
+
+function toggleShopItem(i){
+  shoppingList[i].checked = !shoppingList[i].checked;
+  localStorage.setItem('witchbrew_shoplist', JSON.stringify(shoppingList));
+  renderShoppingList();
+}
+
+function clearShoppingList(){
+  shoppingList = [];
+  shoppingSelection.clear();
+  localStorage.removeItem('witchbrew_shoplist');
+  renderShoppingList();
+  renderShopRecipeSelect();
+}
+
+/* ================= UTIL ================= */
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function escapeAttr(s){ return escapeHtml(s); }
+
+let toastTimer;
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+renderShoppingList();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
