@@ -247,6 +247,12 @@
 
   h3.section-title{font-size:.95rem; color:var(--text-dim); margin:20px 0 10px; text-transform:uppercase; letter-spacing:.5px; font-weight:600;}
 
+  .conn-status{text-align:center; font-size:.75rem; color:var(--text-faint); padding-bottom:10px; display:flex; align-items:center; justify-content:center; gap:6px;}
+  .conn-dot{width:7px; height:7px; border-radius:50%; background:var(--text-faint); display:inline-block;}
+  .conn-dot.ok{background:var(--good); box-shadow:0 0 6px var(--good);}
+  .conn-dot.err{background:var(--danger);}
+  .gekocht-info{font-size:.78rem; color:var(--text-faint); margin-top:6px;}
+
   .nutri-row{display:flex; gap:8px; margin:12px 0; flex-wrap:wrap;}
   .nutri-pill{flex:1; min-width:70px; background:var(--card); border:1px solid var(--line); border-radius:var(--radius-sm); padding:10px 6px; text-align:center;}
   .nutri-pill .val{font-weight:700; color:var(--accent-soft); font-size:1rem;}
@@ -343,6 +349,9 @@
     <h1>WitchBrew</h1>
     <button class="icon-btn" onclick="logout()">⏻</button>
   </header>
+  <div class="conn-status" id="connStatus">
+    <span class="conn-dot" id="connDot"></span> <span id="connText">Verbinde...</span>
+  </div>
 
   <main>
     <!-- ---- TAB: Rezepte ---- -->
@@ -371,8 +380,10 @@
       </div>
     </section>
 
-    <!-- ---- TAB: Favoriten ---- -->
+    <!-- ---- TAB: Listen ---- -->
     <section id="tab-favoriten" class="tab-content">
+      <div class="chips" id="listChips"></div>
+      <div id="listHeader"></div>
       <div id="favList"></div>
     </section>
 
@@ -471,7 +482,7 @@
   <nav class="bottom">
     <button class="nav-btn active" data-tab="rezepte" onclick="switchTab('rezepte')"><span class="glyph">📖</span>Rezepte</button>
     <button class="nav-btn" data-tab="plan" onclick="switchTab('plan')"><span class="glyph">🗓️</span>Plan</button>
-    <button class="nav-btn" data-tab="favoriten" onclick="switchTab('favoriten')"><span class="glyph">⭐</span>Favoriten</button>
+    <button class="nav-btn" data-tab="favoriten" onclick="switchTab('favoriten')"><span class="glyph">📋</span>Listen</button>
     <button class="nav-btn" data-tab="einkauf" onclick="switchTab('einkauf')"><span class="glyph">🧺</span>Einkauf</button>
     <button class="nav-btn" data-tab="neu" onclick="switchTab('neu')"><span class="glyph">✨</span>Neu</button>
   </nav>
@@ -500,11 +511,16 @@
     <ol class="step-list" id="m_schritte"></ol>
 
     <div id="m_naehrwerte"></div>
+    <div id="m_gekochtInfo" class="gekocht-info"></div>
     <div id="m_quelleWrap"></div>
 
     <div class="modal-actions-row">
       <button class="btn-ghost" onclick="toggleFavorit()" id="m_favBtn">☆ Favorit</button>
-      <button class="btn-ghost" onclick="addSingleToShoppingSelection()">🧺 Zur Liste</button>
+      <button class="btn-primary" onclick="markGekocht()">🍳 Gekocht!</button>
+    </div>
+    <div class="modal-actions-row">
+      <button class="btn-ghost" onclick="addSingleToShoppingSelection()">🧺 Einkauf</button>
+      <button class="btn-ghost" onclick="openAddToListPicker()">📋 Zu Liste</button>
     </div>
     <div class="modal-actions-row">
       <button class="btn-ghost" onclick="editRecipe()">✎ Bearbeiten</button>
@@ -513,6 +529,20 @@
     <div class="modal-actions-row">
       <button class="btn-ghost" style="width:100%;" onclick="closeModal()">Schließen</button>
     </div>
+  </div>
+</div>
+
+<!-- ===================== ADD TO LIST MODAL ===================== -->
+<div class="modal-backdrop" id="addToListModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>Zu Liste hinzufügen</h2>
+    <div class="select-recipes-list" id="addToListListing" style="max-height:50vh;"></div>
+    <div class="dyn-list-item">
+      <input type="text" id="newListNameInline" placeholder="Neue Liste, z.B. Suppen">
+      <button class="btn-primary" style="width:auto; flex-shrink:0;" onclick="createListInline()">+</button>
+    </div>
+    <button class="btn-ghost" style="width:100%; margin-top:10px;" onclick="closeAddToListModal()">Schließen</button>
   </div>
 </div>
 
@@ -722,8 +752,17 @@ async function removeMealPlanEntry(id){
 }
 
 /* ================= DATA LOAD ================= */
+function setConnStatus(ok){
+  const dot = document.getElementById('connDot');
+  const txt = document.getElementById('connText');
+  if(!dot) return;
+  dot.className = 'conn-dot ' + (ok ? 'ok' : 'err');
+  txt.textContent = ok ? 'Verbunden' : 'Nicht verbunden';
+}
+
 async function loadRecipes(){
   const { data, error } = await sb.from('witchbrew_recipes').select('*').order('created_at', {ascending:false}).range(0, 9999);
+  setConnStatus(!error);
   if(error){ showToast('Fehler beim Laden: ' + error.message); return; }
   recipes = data || [];
   renderTagChips();
@@ -800,13 +839,21 @@ function toggleCategory(cat){
   renderRecipes();
 }
 
+function categoryEmoji(kat){
+  const map = {
+    'Frühstück':'☕', 'Hauptgericht':'🍲', 'Beilage':'🥗',
+    'Snack':'🍿', 'Dessert':'🍰', 'Getränk':'🥤', 'Sonstiges':'🔮'
+  };
+  return map[kat] || '🔮';
+}
+
 function recipeRowEl(r){
   const row = document.createElement('div');
   row.className = 'recipe-row';
   row.onclick = () => openRecipe(r.id);
   const thumbStyle = r.foto_url ? `style="background-image:url('${r.foto_url}')"` : '';
   row.innerHTML = `
-    <div class="thumb" ${thumbStyle}>${r.foto_url ? '' : '🧙'}</div>
+    <div class="thumb" ${thumbStyle}>${r.foto_url ? '' : categoryEmoji(r.kategorie)}</div>
     <div class="recipe-info">
       <div class="title">${escapeHtml(r.titel)}</div>
       <div class="meta">${(r.tags||[]).slice(0,3).map(t=>`<span class="tag-mini">${escapeHtml(t)}</span>`).join('')}</div>
@@ -815,15 +862,167 @@ function recipeRowEl(r){
   return row;
 }
 
-function renderFavorites(){
-  const wrap = document.getElementById('favList');
-  const favs = recipes.filter(r => r.favorit);
+/* ================= LISTEN ================= */
+let customLists = [];
+let activeListId = 'favoriten'; // 'favoriten' oder eine Listen-UUID
+let listItemsCache = {}; // listId -> [recipeIds]
+
+async function loadCustomLists(){
+  const { data, error } = await sb.from('witchbrew_lists').select('*').order('created_at', {ascending:true});
+  customLists = error ? [] : (data || []);
+}
+
+async function renderFavorites(){
+  await loadCustomLists();
+  renderListChips();
+  await renderActiveList();
+}
+
+function renderListChips(){
+  const wrap = document.getElementById('listChips');
   wrap.innerHTML = '';
-  if(favs.length === 0){
-    wrap.innerHTML = '<div class="empty-state"><div class="glyph">⭐</div>Noch keine Favoriten markiert.</div>';
+  const favChip = document.createElement('div');
+  favChip.className = 'chip' + (activeListId === 'favoriten' ? ' active' : '');
+  favChip.textContent = '⭐ Favoriten';
+  favChip.onclick = () => { activeListId = 'favoriten'; renderListChips(); renderActiveList(); };
+  wrap.appendChild(favChip);
+
+  customLists.forEach(l => {
+    const c = document.createElement('div');
+    c.className = 'chip' + (activeListId === l.id ? ' active' : '');
+    c.textContent = `${l.emoji || '📋'} ${l.name}`;
+    c.onclick = () => { activeListId = l.id; renderListChips(); renderActiveList(); };
+    wrap.appendChild(c);
+  });
+
+  const addChip = document.createElement('div');
+  addChip.className = 'chip';
+  addChip.style.borderStyle = 'dashed';
+  addChip.textContent = '+ Neue Liste';
+  addChip.onclick = createNewListPrompt;
+  wrap.appendChild(addChip);
+}
+
+async function createNewListPrompt(){
+  const name = prompt('Name der neuen Liste (z.B. Suppen, Sommergerichte):');
+  if(!name || !name.trim()) return;
+  const { data, error } = await sb.from('witchbrew_lists').insert({name: name.trim()}).select();
+  if(error){ showToast('Fehler: ' + error.message); return; }
+  await loadCustomLists();
+  activeListId = data[0].id;
+  renderListChips();
+  renderActiveList();
+}
+
+async function deleteActiveList(){
+  if(activeListId === 'favoriten') return;
+  const list = customLists.find(l => l.id === activeListId);
+  if(!list) return;
+  if(!confirm(`Liste "${list.name}" wirklich löschen? (Die Rezepte selbst bleiben erhalten)`)) return;
+  await sb.from('witchbrew_lists').delete().eq('id', activeListId);
+  activeListId = 'favoriten';
+  await loadCustomLists();
+  renderListChips();
+  renderActiveList();
+}
+
+async function renderActiveList(){
+  const headerWrap = document.getElementById('listHeader');
+  const wrap = document.getElementById('favList');
+  wrap.innerHTML = '';
+  headerWrap.innerHTML = '';
+
+  if(activeListId === 'favoriten'){
+    const favs = recipes.filter(r => r.favorit);
+    if(favs.length === 0){
+      wrap.innerHTML = '<div class="empty-state"><div class="glyph">⭐</div>Noch keine Favoriten markiert.</div>';
+      return;
+    }
+    favs.forEach(r => wrap.appendChild(recipeRowEl(r)));
     return;
   }
-  favs.forEach(r => wrap.appendChild(recipeRowEl(r)));
+
+  const list = customLists.find(l => l.id === activeListId);
+  if(!list) return;
+  headerWrap.innerHTML = `<button class="btn-ghost" style="width:100%; margin-bottom:10px; color:var(--danger); border-color:var(--danger);" onclick="deleteActiveList()">🗑 Liste "${escapeHtml(list.name)}" löschen</button>`;
+
+  const { data, error } = await sb.from('witchbrew_list_items').select('recipe_id').eq('list_id', activeListId);
+  const recipeIds = error ? [] : (data || []).map(r => r.recipe_id);
+  const items = recipes.filter(r => recipeIds.includes(r.id));
+  if(items.length === 0){
+    wrap.innerHTML = '<div class="empty-state"><div class="glyph">📋</div>Noch keine Rezepte in dieser Liste.<br>Öffne ein Rezept → "Zu Liste".</div>';
+    return;
+  }
+  items.forEach(r => wrap.appendChild(recipeRowEl(r)));
+}
+
+/* ---- Zu Liste hinzufügen (aus Rezept-Detail) ---- */
+async function openAddToListPicker(){
+  await loadCustomLists();
+  const listWrap = document.getElementById('addToListListing');
+  listWrap.innerHTML = '';
+  if(customLists.length === 0){
+    listWrap.innerHTML = '<div class="empty-state" style="padding:20px;">Noch keine eigenen Listen. Leg unten eine an.</div>';
+  }
+  const { data } = await sb.from('witchbrew_list_items').select('list_id').eq('recipe_id', activeRecipe.id);
+  const memberOf = new Set((data||[]).map(r => r.list_id));
+
+  customLists.forEach(l => {
+    const row = document.createElement('div');
+    row.className = 'select-recipe-row';
+    const inList = memberOf.has(l.id);
+    row.innerHTML = `<input type="checkbox" ${inList?'checked':''}> <span>${l.emoji||'📋'} ${escapeHtml(l.name)}</span>`;
+    row.querySelector('input').onchange = (e) => toggleListMembership(l.id, e.target.checked);
+    listWrap.appendChild(row);
+  });
+  document.getElementById('addToListModal').classList.add('show');
+}
+
+async function toggleListMembership(listId, checked){
+  if(checked){
+    await sb.from('witchbrew_list_items').insert({list_id:listId, recipe_id:activeRecipe.id});
+    showToast('Hinzugefügt');
+  } else {
+    await sb.from('witchbrew_list_items').delete().eq('list_id',listId).eq('recipe_id',activeRecipe.id);
+    showToast('Entfernt');
+  }
+}
+
+async function createListInline(){
+  const input = document.getElementById('newListNameInline');
+  const name = input.value.trim();
+  if(!name) return;
+  const { data, error } = await sb.from('witchbrew_lists').insert({name}).select();
+  if(error){ showToast('Fehler: ' + error.message); return; }
+  await sb.from('witchbrew_list_items').insert({list_id:data[0].id, recipe_id:activeRecipe.id});
+  input.value = '';
+  showToast('Liste erstellt & Rezept hinzugefügt');
+  openAddToListPicker();
+}
+
+function closeAddToListModal(){
+  document.getElementById('addToListModal').classList.remove('show');
+}
+
+/* ---- Gekocht-Button ---- */
+async function markGekocht(){
+  const newCount = (activeRecipe.gekocht_count || 0) + 1;
+  const now = new Date().toISOString();
+  await sb.from('witchbrew_recipes').update({gekocht_count:newCount, zuletzt_gekocht:now}).eq('id', activeRecipe.id);
+  activeRecipe.gekocht_count = newCount;
+  activeRecipe.zuletzt_gekocht = now;
+  const local = recipes.find(r=>r.id===activeRecipe.id);
+  if(local){ local.gekocht_count = newCount; local.zuletzt_gekocht = now; }
+  renderGekochtInfo();
+  showToast('Guten Appetit! 🍲');
+}
+
+function renderGekochtInfo(){
+  const wrap = document.getElementById('m_gekochtInfo');
+  const count = activeRecipe.gekocht_count || 0;
+  if(count === 0){ wrap.textContent = ''; return; }
+  const datum = activeRecipe.zuletzt_gekocht ? new Date(activeRecipe.zuletzt_gekocht).toLocaleDateString('de-DE') : '';
+  wrap.textContent = `Schon ${count}x gekocht${datum ? ', zuletzt am ' + datum : ''}`;
 }
 
 /* ================= MODAL ================= */
@@ -849,6 +1048,7 @@ function openRecipe(id){
       <div class="nutri-pill"><div class="val">${activeRecipe.kohlenhydrate ?? '–'}g</div><div class="lbl">Kohlenh.</div></div>
       <div class="nutri-pill"><div class="val">${activeRecipe.fett ?? '–'}g</div><div class="lbl">Fett</div></div>
     </div>` : '';
+  renderGekochtInfo();
   updateFavBtn();
   document.getElementById('recipeModal').classList.add('show');
 }
