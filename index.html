@@ -209,6 +209,8 @@
 
   /* shopping list */
   .shop-item{display:flex; align-items:center; gap:10px; padding:12px 4px; border-bottom:1px solid var(--line);}
+  .shop-item.dragging{opacity:.5; background:var(--card-2);}
+  .drag-handle{color:var(--text-faint); font-size:1.1rem; cursor:grab; touch-action:none; padding:4px; flex-shrink:0; user-select:none;}
   .shop-item.checked .shop-name{text-decoration:line-through; color:var(--text-faint);}
   .shop-check{width:22px; height:22px; border-radius:6px; border:2px solid var(--accent-dim); flex-shrink:0; display:flex; align-items:center; justify-content:center; color:transparent;}
   .shop-check.on{background:var(--accent); border-color:var(--accent); color:#fff;}
@@ -1559,7 +1561,9 @@ function addSingleToShoppingSelection(){
 let shoppingList = []; // wird aus Supabase geladen
 
 async function loadShoppingList(){
-  const { data, error } = await sb.from('witchbrew_shoplist').select('*').order('created_at', {ascending:true});
+  const { data, error } = await sb.from('witchbrew_shoplist').select('*')
+    .order('sort_order', {ascending:true, nullsFirst:false})
+    .order('created_at', {ascending:true});
   shoppingList = error ? [] : (data || []);
   renderShoppingList();
 }
@@ -1578,11 +1582,12 @@ async function buildShoppingList(){
       if(z.menge) map[key].amounts.push(z.menge);
     });
   });
-  const recipeItems = Object.values(map).map(item => ({
+  const recipeItems = Object.values(map).map((item, i) => ({
     name: item.name,
     amt: item.amounts.join(' + '),
     checked: false,
-    manual: false
+    manual: false,
+    sort_order: i
   }));
   // manuell hinzugefügte Sachen bleiben erhalten, Rezept-Zutaten werden neu berechnet
   await sb.from('witchbrew_shoplist').delete().eq('manual', false);
@@ -1603,20 +1608,71 @@ function renderShoppingList(){
   shoppingList.forEach(item => {
     const row = document.createElement('div');
     row.className = 'shop-item' + (item.checked ? ' checked' : '');
+    row.dataset.id = item.id;
     row.innerHTML = `
+      <span class="drag-handle">⠿</span>
       <div class="shop-check ${item.checked ? 'on':''}" onclick="toggleShopItem('${item.id}')">${item.checked ? '✓':''}</div>
       <span class="shop-name">${escapeHtml(item.name)}</span>
       <span class="shop-amt">${escapeHtml(item.amt||'')}</span>
       <button class="remove-btn" onclick="removeShopItem('${item.id}')">✕</button>`;
     wrap.appendChild(row);
+    attachShopDragHandlers(row);
   });
+}
+
+/* ---- Drag & Drop zum manuellen Sortieren ---- */
+let shopDragRow = null;
+
+function attachShopDragHandlers(row){
+  const handle = row.querySelector('.drag-handle');
+  handle.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    shopDragRow = row;
+    row.classList.add('dragging');
+    handle.setPointerCapture(e.pointerId);
+  });
+  handle.addEventListener('pointermove', (e) => {
+    if(shopDragRow !== row) return;
+    const listEl = document.getElementById('shoppingListView');
+    const siblings = Array.from(listEl.querySelectorAll('.shop-item')).filter(r => r !== row);
+    const y = e.clientY;
+    for(const sib of siblings){
+      const rect = sib.getBoundingClientRect();
+      const mid = rect.top + rect.height / 2;
+      if(y < mid && sib.previousElementSibling !== row){
+        listEl.insertBefore(row, sib);
+        break;
+      } else if(y >= mid && sib.nextElementSibling !== row){
+        listEl.insertBefore(row, sib.nextSibling);
+        break;
+      }
+    }
+  });
+  const endDrag = async () => {
+    if(shopDragRow !== row) return;
+    row.classList.remove('dragging');
+    shopDragRow = null;
+    await persistShopOrder();
+  };
+  handle.addEventListener('pointerup', endDrag);
+  handle.addEventListener('pointercancel', endDrag);
+}
+
+async function persistShopOrder(){
+  const rows = Array.from(document.querySelectorAll('#shoppingListView .shop-item'));
+  const ids = rows.map(r => r.dataset.id);
+  shoppingList.sort((a,b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+  for(let i=0; i<ids.length; i++){
+    await sb.from('witchbrew_shoplist').update({sort_order:i}).eq('id', ids[i]);
+  }
 }
 
 async function addManualShopItem(){
   const input = document.getElementById('manualShopInput');
   const name = input.value.trim();
   if(!name) return;
-  await sb.from('witchbrew_shoplist').insert({name, amt:'', checked:false, manual:true});
+  const maxOrder = shoppingList.reduce((m,i) => Math.max(m, i.sort_order ?? 0), 0);
+  await sb.from('witchbrew_shoplist').insert({name, amt:'', checked:false, manual:true, sort_order:maxOrder+1});
   input.value = '';
   await loadShoppingList();
 }
