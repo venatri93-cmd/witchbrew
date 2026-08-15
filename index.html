@@ -252,6 +252,7 @@
   .conn-dot.ok{background:var(--good); box-shadow:0 0 6px var(--good);}
   .conn-dot.err{background:var(--danger);}
   .gekocht-info{font-size:.78rem; color:var(--text-faint); margin-top:6px;}
+  .gekocht-badge{font-size:.72rem; opacity:.8;}
 
   .nutri-row{display:flex; gap:8px; margin:12px 0; flex-wrap:wrap;}
   .nutri-pill{flex:1; min-width:70px; background:var(--card); border:1px solid var(--line); border-radius:var(--radius-sm); padding:10px 6px; text-align:center;}
@@ -751,13 +752,37 @@ function renderPlanPickerList(){
     listWrap.innerHTML = '<div class="empty-state">Nichts gefunden.</div>';
     return;
   }
+  const byCat = {};
   filtered.forEach(r => {
-    const row = document.createElement('div');
-    row.className = 'picker-row';
-    row.onclick = () => addMealPlanEntry(r.id);
-    row.innerHTML = `<span>${escapeHtml(r.titel)}</span>`;
-    listWrap.appendChild(row);
+    const cat = r.kategorie || 'Sonstiges';
+    if(!byCat[cat]) byCat[cat] = [];
+    byCat[cat].push(r);
   });
+  Object.keys(byCat).sort().forEach(cat => {
+    const isOpen = q ? true : ppOpenCats.has(cat);
+    const catEl = document.createElement('div');
+    catEl.className = 'category' + (isOpen ? ' open' : '');
+    catEl.innerHTML = `
+      <div class="category-head" onclick="togglePpCategory('${cat.replace(/'/g,"\\'")}')">
+        <div><span class="name">${categoryEmoji(cat)} ${escapeHtml(cat)}</span><span class="count">${byCat[cat].length}</span></div>
+        <span class="chevron">⌄</span>
+      </div>
+      <div class="category-body"></div>`;
+    const body = catEl.querySelector('.category-body');
+    byCat[cat].forEach(r => {
+      const row = document.createElement('div');
+      row.className = 'picker-row';
+      row.onclick = () => addMealPlanEntry(r.id);
+      row.innerHTML = `<span>${escapeHtml(r.titel)}</span>`;
+      body.appendChild(row);
+    });
+    listWrap.appendChild(catEl);
+  });
+}
+let ppOpenCats = new Set();
+function togglePpCategory(cat){
+  if(ppOpenCats.has(cat)) ppOpenCats.delete(cat); else ppOpenCats.add(cat);
+  renderPlanPickerList();
 }
 
 function closePlanPicker(){
@@ -915,10 +940,11 @@ function recipeRowEl(r){
   row.className = 'recipe-row';
   row.onclick = () => openRecipe(r.id);
   const thumbStyle = r.foto_url ? `style="background-image:url('${r.foto_url}')"` : '';
+  const gekochtBadge = r.gekocht_count > 0 ? `<span class="gekocht-badge" title="Schon ${r.gekocht_count}x gekocht">🍳</span>` : '';
   row.innerHTML = `
     <div class="thumb" ${thumbStyle}>${r.foto_url ? '' : categoryEmoji(r.kategorie)}</div>
     <div class="recipe-info">
-      <div class="title">${escapeHtml(r.titel)}</div>
+      <div class="title">${escapeHtml(r.titel)} ${gekochtBadge}</div>
       <div class="meta">${(r.tags||[]).slice(0,3).map(t=>`<span class="tag-mini">${escapeHtml(t)}</span>`).join('')}</div>
     </div>
     <div class="fav-star ${r.favorit ? 'on':''}">${r.favorit ? '★' : '☆'}</div>`;
@@ -962,6 +988,12 @@ function renderListChips(){
   favChip.textContent = '⭐ Favoriten';
   favChip.onclick = () => setActiveList('favoriten');
   wrap.appendChild(favChip);
+
+  const gekochtChip = document.createElement('div');
+  gekochtChip.className = 'chip' + (activeListId === 'gekocht' ? ' active' : '');
+  gekochtChip.textContent = '🍳 Gekocht';
+  gekochtChip.onclick = () => setActiveList('gekocht');
+  wrap.appendChild(gekochtChip);
 
   customLists.forEach(l => {
     const c = document.createElement('div');
@@ -1017,6 +1049,17 @@ async function renderActiveList(){
     return;
   }
 
+  if(activeListId === 'gekocht'){
+    const cooked = recipes.filter(r => r.gekocht_count > 0)
+      .sort((a,b) => new Date(b.zuletzt_gekocht||0) - new Date(a.zuletzt_gekocht||0));
+    if(cooked.length === 0){
+      wrap.innerHTML = '<div class="empty-state"><div class="glyph">🍳</div>Noch nichts als "gekocht" markiert.<br>Öffne ein Rezept und tippe auf "Gekocht!".</div>';
+      return;
+    }
+    cooked.forEach(r => wrap.appendChild(recipeRowEl(r)));
+    return;
+  }
+
   const list = customLists.find(l => l.id === activeListId);
   if(!list) return;
   headerWrap.innerHTML = `
@@ -1057,22 +1100,46 @@ function renderLarList(){
     wrap.innerHTML = '<div class="empty-state" style="padding:20px;">Nichts gefunden.</div>';
     return;
   }
+  const byCat = {};
   filtered.forEach(r => {
-    const row = document.createElement('div');
-    row.className = 'select-recipe-row';
-    const checked = larSelected.has(r.id) ? 'checked' : '';
-    row.innerHTML = `<input type="checkbox" ${checked}> <span>${escapeHtml(r.titel)}</span>`;
-    row.querySelector('input').onchange = async (e) => {
-      if(e.target.checked){
-        larSelected.add(r.id);
-        await sb.from('witchbrew_list_items').insert({list_id:larListId, recipe_id:r.id});
-      } else {
-        larSelected.delete(r.id);
-        await sb.from('witchbrew_list_items').delete().eq('list_id',larListId).eq('recipe_id',r.id);
-      }
-    };
-    wrap.appendChild(row);
+    const cat = r.kategorie || 'Sonstiges';
+    if(!byCat[cat]) byCat[cat] = [];
+    byCat[cat].push(r);
   });
+  Object.keys(byCat).sort().forEach(cat => {
+    const isOpen = q ? true : larOpenCats.has(cat);
+    const catEl = document.createElement('div');
+    catEl.className = 'category' + (isOpen ? ' open' : '');
+    catEl.innerHTML = `
+      <div class="category-head" onclick="toggleLarCategory('${cat.replace(/'/g,"\\'")}')">
+        <div><span class="name">${categoryEmoji(cat)} ${escapeHtml(cat)}</span><span class="count">${byCat[cat].length}</span></div>
+        <span class="chevron">⌄</span>
+      </div>
+      <div class="category-body"></div>`;
+    const body = catEl.querySelector('.category-body');
+    byCat[cat].forEach(r => {
+      const row = document.createElement('div');
+      row.className = 'select-recipe-row';
+      const checked = larSelected.has(r.id) ? 'checked' : '';
+      row.innerHTML = `<input type="checkbox" ${checked}> <span>${escapeHtml(r.titel)}</span>`;
+      row.querySelector('input').onchange = async (e) => {
+        if(e.target.checked){
+          larSelected.add(r.id);
+          await sb.from('witchbrew_list_items').insert({list_id:larListId, recipe_id:r.id});
+        } else {
+          larSelected.delete(r.id);
+          await sb.from('witchbrew_list_items').delete().eq('list_id',larListId).eq('recipe_id',r.id);
+        }
+      };
+      body.appendChild(row);
+    });
+    wrap.appendChild(catEl);
+  });
+}
+let larOpenCats = new Set();
+function toggleLarCategory(cat){
+  if(larOpenCats.has(cat)) larOpenCats.delete(cat); else larOpenCats.add(cat);
+  renderLarList();
 }
 
 function closeListAddRecipes(){
@@ -1138,6 +1205,7 @@ async function markGekocht(){
   const local = recipes.find(r=>r.id===activeRecipe.id);
   if(local){ local.gekocht_count = newCount; local.zuletzt_gekocht = now; }
   renderGekochtInfo();
+  renderRecipes();
   showToast('Guten Appetit! 🍲');
 }
 
@@ -1430,6 +1498,8 @@ async function importJson(){
 }
 
 /* ================= SHOPPING LIST ================= */
+let shopOpenCats = new Set();
+
 function renderShopRecipeSelect(){
   const q = (document.getElementById('shopSearchInput')?.value || '').trim().toLowerCase();
   const wrap = document.getElementById('shopRecipeSelect');
@@ -1439,13 +1509,40 @@ function renderShopRecipeSelect(){
     wrap.innerHTML = '<div class="empty-state" style="padding:16px;">Nichts gefunden.</div>';
     return;
   }
+  const byCat = {};
   filtered.forEach(r => {
-    const row = document.createElement('div');
-    row.className = 'select-recipe-row';
-    const checked = shoppingSelection.has(r.id) ? 'checked' : '';
-    row.innerHTML = `<input type="checkbox" ${checked} onchange="toggleShopSelect('${r.id}', this.checked)"><span>${escapeHtml(r.titel)}</span>`;
-    wrap.appendChild(row);
+    const cat = r.kategorie || 'Sonstiges';
+    if(!byCat[cat]) byCat[cat] = [];
+    byCat[cat].push(r);
   });
+  const cats = Object.keys(byCat).sort();
+  cats.forEach(cat => {
+    // beim Suchen automatisch aufklappen, damit Treffer sofort sichtbar sind
+    const isOpen = q ? true : shopOpenCats.has(cat);
+    const catEl = document.createElement('div');
+    catEl.className = 'category' + (isOpen ? ' open' : '');
+    catEl.innerHTML = `
+      <div class="category-head" onclick="toggleShopCategory('${cat.replace(/'/g,"\\'")}')">
+        <div><span class="name">${categoryEmoji(cat)} ${escapeHtml(cat)}</span><span class="count">${byCat[cat].length}</span></div>
+        <span class="chevron">⌄</span>
+      </div>
+      <div class="category-body"></div>`;
+    const body = catEl.querySelector('.category-body');
+    byCat[cat].forEach(r => {
+      const row = document.createElement('div');
+      row.className = 'select-recipe-row';
+      const checked = shoppingSelection.has(r.id) ? 'checked' : '';
+      row.innerHTML = `<input type="checkbox" ${checked} onchange="toggleShopSelect('${r.id}', this.checked)"><span>${escapeHtml(r.titel)}</span>`;
+      body.appendChild(row);
+    });
+    wrap.appendChild(catEl);
+  });
+}
+
+function toggleShopCategory(cat){
+  if(shopOpenCats.has(cat)) shopOpenCats.delete(cat);
+  else shopOpenCats.add(cat);
+  renderShopRecipeSelect();
 }
 
 function toggleShopSelect(id, checked){
