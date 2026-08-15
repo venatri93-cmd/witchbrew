@@ -358,9 +358,10 @@
     <section id="tab-rezepte" class="tab-content active">
       <div class="search-wrap">
         <span class="icon">🔍</span>
-        <input type="text" id="searchInput" placeholder="Rezept suchen..." oninput="renderRecipes()">
+        <input type="text" id="searchInput" placeholder="Rezept suchen..." oninput="saveViewState(); renderRecipes(); updateResetFilterBtn();">
       </div>
       <div class="chips" id="tagChips"></div>
+      <button class="chip" id="resetFiltersBtn" style="display:none; border-color:var(--danger); color:var(--danger); margin-bottom:12px;" onclick="resetFilters()">✕ Filter zurücksetzen</button>
       <div id="recipeAccordion"></div>
     </section>
 
@@ -390,6 +391,7 @@
     <!-- ---- TAB: Einkaufsliste ---- -->
     <section id="tab-einkauf" class="tab-content">
       <h3 class="section-title">Rezepte auswählen</h3>
+      <div class="search-wrap"><span class="icon">🔍</span><input type="text" id="shopSearchInput" placeholder="Rezept suchen..." oninput="renderShopRecipeSelect()"></div>
       <div class="select-recipes-list" id="shopRecipeSelect"></div>
       <button class="btn-primary" style="width:100%;" onclick="buildShoppingList()">Einkaufsliste erstellen</button>
       <h3 class="section-title">Manuell hinzufügen</h3>
@@ -553,8 +555,20 @@
   <div class="modal">
     <div class="modal-handle"></div>
     <h2 id="pp_dateLabel">Rezept hinzufügen</h2>
-    <div class="select-recipes-list" id="planPickerList" style="max-height:60vh;"></div>
+    <div class="search-wrap"><span class="icon">🔍</span><input type="text" id="ppSearch" placeholder="Rezept suchen..." oninput="renderPlanPickerList()"></div>
+    <div class="select-recipes-list" id="planPickerList" style="max-height:55vh;"></div>
     <button class="btn-ghost" style="width:100%;" onclick="closePlanPicker()">Schließen</button>
+  </div>
+</div>
+
+<!-- ===================== LIST: REZEPTE HINZUFÜGEN MODAL ===================== -->
+<div class="modal-backdrop" id="listAddRecipesModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>Rezepte zur Liste hinzufügen</h2>
+    <div class="search-wrap"><span class="icon">🔍</span><input type="text" id="larSearch" placeholder="Rezept suchen..." oninput="renderLarList()"></div>
+    <div class="select-recipes-list" id="larList" style="max-height:55vh;"></div>
+    <button class="btn-primary" style="width:100%; margin-top:10px;" onclick="closeListAddRecipes()">Fertig</button>
   </div>
 </div>
 
@@ -641,6 +655,7 @@ function logout(){
 function enterApp(){
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
+  restoreViewState();
   loadRecipes();
   addZutatRow(); addSchrittRow();
   const lastTab = localStorage.getItem('witchbrew_lasttab') || 'rezepte';
@@ -675,11 +690,15 @@ function startOfWeek(d){
   date.setHours(0,0,0,0);
   return date;
 }
-let planWeekStart = startOfWeek(new Date());
+let planWeekStart = (() => {
+  const saved = localStorage.getItem('witchbrew_planweek');
+  return saved ? new Date(saved) : startOfWeek(new Date());
+})();
 let mealPlanEntries = []; // {id, datum, recipe_id}
 
 function shiftWeek(delta){
   planWeekStart.setDate(planWeekStart.getDate() + delta*7);
+  localStorage.setItem('witchbrew_planweek', planWeekStart.toISOString());
   renderPlanWeek();
 }
 
@@ -718,19 +737,27 @@ async function renderPlanWeek(){
 
 function openPlanPicker(){
   document.getElementById('pp_dateLabel').textContent = 'Rezept zur Woche hinzufügen';
+  document.getElementById('ppSearch').value = '';
+  renderPlanPickerList();
+  document.getElementById('planPickerModal').classList.add('show');
+}
+
+function renderPlanPickerList(){
+  const q = document.getElementById('ppSearch').value.trim().toLowerCase();
   const listWrap = document.getElementById('planPickerList');
   listWrap.innerHTML = '';
-  if(recipes.length === 0){
-    listWrap.innerHTML = '<div class="empty-state">Noch keine Rezepte vorhanden.</div>';
+  const filtered = recipes.filter(r => r.titel.toLowerCase().includes(q));
+  if(filtered.length === 0){
+    listWrap.innerHTML = '<div class="empty-state">Nichts gefunden.</div>';
+    return;
   }
-  recipes.forEach(r => {
+  filtered.forEach(r => {
     const row = document.createElement('div');
     row.className = 'picker-row';
     row.onclick = () => addMealPlanEntry(r.id);
     row.innerHTML = `<span>${escapeHtml(r.titel)}</span>`;
     listWrap.appendChild(row);
   });
-  document.getElementById('planPickerModal').classList.add('show');
 }
 
 function closePlanPicker(){
@@ -783,20 +810,55 @@ function renderTagChips(){
   const allChip = document.createElement('div');
   allChip.className = 'chip' + (currentTag === null ? ' active' : '');
   allChip.textContent = 'Alle';
-  allChip.onclick = () => { currentTag = null; renderTagChips(); renderRecipes(); };
+  allChip.onclick = () => { currentTag = null; saveViewState(); renderTagChips(); renderRecipes(); };
   wrap.appendChild(allChip);
   tags.forEach(t => {
     const c = document.createElement('div');
     c.className = 'chip' + (currentTag === t ? ' active' : '');
     c.textContent = t;
-    c.onclick = () => { currentTag = (currentTag === t ? null : t); renderTagChips(); renderRecipes(); };
+    c.onclick = () => { currentTag = (currentTag === t ? null : t); saveViewState(); renderTagChips(); renderRecipes(); };
     wrap.appendChild(c);
   });
+  updateResetFilterBtn();
+}
+
+function updateResetFilterBtn(){
+  const btn = document.getElementById('resetFiltersBtn');
+  const searchVal = document.getElementById('searchInput').value.trim();
+  const active = currentTag !== null || searchVal !== '';
+  btn.style.display = active ? 'inline-block' : 'none';
+}
+
+function resetFilters(){
+  currentTag = null;
+  document.getElementById('searchInput').value = '';
+  saveViewState();
+  renderTagChips();
+  renderRecipes();
+}
+
+function saveViewState(){
+  localStorage.setItem('witchbrew_viewstate', JSON.stringify({
+    tag: currentTag,
+    search: document.getElementById('searchInput').value,
+    openCat: openCategory
+  }));
+}
+
+function restoreViewState(){
+  try{
+    const s = JSON.parse(localStorage.getItem('witchbrew_viewstate') || '{}');
+    currentTag = s.tag ?? null;
+    openCategory = s.openCat ?? null;
+    document.getElementById('searchInput').value = s.search || '';
+  } catch(e){}
 }
 
 /* ================= RENDER RECIPE ACCORDION ================= */
 function filteredRecipes(){
   const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  saveViewState();
+  updateResetFilterBtn();
   return recipes.filter(r => {
     if(currentTag && !(r.tags||[]).includes(currentTag)) return false;
     if(q && !r.titel.toLowerCase().includes(q)) return false;
@@ -836,6 +898,7 @@ function renderRecipes(){
 
 function toggleCategory(cat){
   openCategory = (openCategory === cat ? null : cat);
+  saveViewState();
   renderRecipes();
 }
 
@@ -873,9 +936,22 @@ async function loadCustomLists(){
 }
 
 async function renderFavorites(){
+  const saved = localStorage.getItem('witchbrew_activelist');
+  if(saved) activeListId = saved;
   await loadCustomLists();
+  // falls gespeicherte Liste inzwischen gelöscht wurde, zurück zu Favoriten
+  if(activeListId !== 'favoriten' && !customLists.find(l => l.id === activeListId)){
+    activeListId = 'favoriten';
+  }
   renderListChips();
   await renderActiveList();
+}
+
+function setActiveList(id){
+  activeListId = id;
+  localStorage.setItem('witchbrew_activelist', id);
+  renderListChips();
+  renderActiveList();
 }
 
 function renderListChips(){
@@ -884,14 +960,14 @@ function renderListChips(){
   const favChip = document.createElement('div');
   favChip.className = 'chip' + (activeListId === 'favoriten' ? ' active' : '');
   favChip.textContent = '⭐ Favoriten';
-  favChip.onclick = () => { activeListId = 'favoriten'; renderListChips(); renderActiveList(); };
+  favChip.onclick = () => setActiveList('favoriten');
   wrap.appendChild(favChip);
 
   customLists.forEach(l => {
     const c = document.createElement('div');
     c.className = 'chip' + (activeListId === l.id ? ' active' : '');
     c.textContent = `${l.emoji || '📋'} ${l.name}`;
-    c.onclick = () => { activeListId = l.id; renderListChips(); renderActiveList(); };
+    c.onclick = () => setActiveList(l.id);
     wrap.appendChild(c);
   });
 
@@ -909,9 +985,9 @@ async function createNewListPrompt(){
   const { data, error } = await sb.from('witchbrew_lists').insert({name: name.trim()}).select();
   if(error){ showToast('Fehler: ' + error.message); return; }
   await loadCustomLists();
-  activeListId = data[0].id;
-  renderListChips();
-  renderActiveList();
+  setActiveList(data[0].id);
+  // direkt Rezepte suchbar hinzufügen können
+  openListAddRecipes(data[0].id);
 }
 
 async function deleteActiveList(){
@@ -920,10 +996,9 @@ async function deleteActiveList(){
   if(!list) return;
   if(!confirm(`Liste "${list.name}" wirklich löschen? (Die Rezepte selbst bleiben erhalten)`)) return;
   await sb.from('witchbrew_lists').delete().eq('id', activeListId);
-  activeListId = 'favoriten';
+  setActiveList('favoriten');
   await loadCustomLists();
   renderListChips();
-  renderActiveList();
 }
 
 async function renderActiveList(){
@@ -944,16 +1019,65 @@ async function renderActiveList(){
 
   const list = customLists.find(l => l.id === activeListId);
   if(!list) return;
-  headerWrap.innerHTML = `<button class="btn-ghost" style="width:100%; margin-bottom:10px; color:var(--danger); border-color:var(--danger);" onclick="deleteActiveList()">🗑 Liste "${escapeHtml(list.name)}" löschen</button>`;
+  headerWrap.innerHTML = `
+    <div style="display:flex; gap:8px; margin-bottom:12px;">
+      <button class="btn-primary" style="flex:1;" onclick="openListAddRecipes('${activeListId}')">+ Rezepte hinzufügen</button>
+      <button class="btn-ghost" style="color:var(--danger); border-color:var(--danger); flex-shrink:0;" onclick="deleteActiveList()">🗑</button>
+    </div>`;
 
   const { data, error } = await sb.from('witchbrew_list_items').select('recipe_id').eq('list_id', activeListId);
   const recipeIds = error ? [] : (data || []).map(r => r.recipe_id);
   const items = recipes.filter(r => recipeIds.includes(r.id));
   if(items.length === 0){
-    wrap.innerHTML = '<div class="empty-state"><div class="glyph">📋</div>Noch keine Rezepte in dieser Liste.<br>Öffne ein Rezept → "Zu Liste".</div>';
+    wrap.innerHTML = '<div class="empty-state"><div class="glyph">📋</div>Noch keine Rezepte in dieser Liste.<br>Tippe oben auf "+ Rezepte hinzufügen".</div>';
     return;
   }
   items.forEach(r => wrap.appendChild(recipeRowEl(r)));
+}
+
+/* ---- Rezepte zu einer Liste hinzufügen (mit Suche, Mehrfachauswahl) ---- */
+let larListId = null;
+let larSelected = new Set();
+
+async function openListAddRecipes(listId){
+  larListId = listId;
+  const { data } = await sb.from('witchbrew_list_items').select('recipe_id').eq('list_id', listId);
+  larSelected = new Set((data||[]).map(r => r.recipe_id));
+  document.getElementById('larSearch').value = '';
+  renderLarList();
+  document.getElementById('listAddRecipesModal').classList.add('show');
+}
+
+function renderLarList(){
+  const q = document.getElementById('larSearch').value.trim().toLowerCase();
+  const wrap = document.getElementById('larList');
+  wrap.innerHTML = '';
+  const filtered = recipes.filter(r => r.titel.toLowerCase().includes(q));
+  if(filtered.length === 0){
+    wrap.innerHTML = '<div class="empty-state" style="padding:20px;">Nichts gefunden.</div>';
+    return;
+  }
+  filtered.forEach(r => {
+    const row = document.createElement('div');
+    row.className = 'select-recipe-row';
+    const checked = larSelected.has(r.id) ? 'checked' : '';
+    row.innerHTML = `<input type="checkbox" ${checked}> <span>${escapeHtml(r.titel)}</span>`;
+    row.querySelector('input').onchange = async (e) => {
+      if(e.target.checked){
+        larSelected.add(r.id);
+        await sb.from('witchbrew_list_items').insert({list_id:larListId, recipe_id:r.id});
+      } else {
+        larSelected.delete(r.id);
+        await sb.from('witchbrew_list_items').delete().eq('list_id',larListId).eq('recipe_id',r.id);
+      }
+    };
+    wrap.appendChild(row);
+  });
+}
+
+function closeListAddRecipes(){
+  document.getElementById('listAddRecipesModal').classList.remove('show');
+  renderActiveList();
 }
 
 /* ---- Zu Liste hinzufügen (aus Rezept-Detail) ---- */
@@ -1307,9 +1431,15 @@ async function importJson(){
 
 /* ================= SHOPPING LIST ================= */
 function renderShopRecipeSelect(){
+  const q = (document.getElementById('shopSearchInput')?.value || '').trim().toLowerCase();
   const wrap = document.getElementById('shopRecipeSelect');
   wrap.innerHTML = '';
-  recipes.forEach(r => {
+  const filtered = recipes.filter(r => r.titel.toLowerCase().includes(q));
+  if(filtered.length === 0){
+    wrap.innerHTML = '<div class="empty-state" style="padding:16px;">Nichts gefunden.</div>';
+    return;
+  }
+  filtered.forEach(r => {
     const row = document.createElement('div');
     row.className = 'select-recipe-row';
     const checked = shoppingSelection.has(r.id) ? 'checked' : '';
